@@ -34,7 +34,14 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
     var message := ""
     if not success:
         if data is Dictionary and data.has("message"):
-            message = str(data["message"])
+            var api_message: Variant = data["message"]
+            if api_message is Array:
+                var parts := PackedStringArray()
+                for item in api_message:
+                    parts.append(str(item))
+                message = "\n".join(parts)
+            else:
+                message = str(api_message)
         else:
             message = "No se pudo conectar con la API"
     completed.emit(success, response_code, data, message)

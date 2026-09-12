@@ -1,8 +1,10 @@
 # Michi TD Game
 
-Cliente de escritorio Godot 4.7.2 para Michi TD. Esta primera base permite registrarse o iniciar sesión y presenta una pantalla de bienvenida sobre un carrusel de fondos de fantasía con transiciones suaves.
+Cliente de escritorio Godot 4.7.2 para Michi TD. Esta primera base permite registrarse o iniciar sesión sobre un carrusel de paisajes, con un panel de acceso adaptable y estilo medieval.
 
 El juego usa una base de 1920×1080, arranca en una ventana de 1280×720 y escala el contenido para conservar la composición en resoluciones distintas. El acceso usa un panel translúcido con desenfoque de fondo y permite mostrar u ocultar la contraseña.
+
+El carrusel alterna sus ilustraciones cada 8 segundos con un crossfade suave. Los fondos y packs visuales están disponibles en `assets/backgrounds` y `assets/ui` para reutilizarlos en las próximas pantallas y controles.
 
 ## Desarrollo
 
@@ -18,4 +20,4 @@ godot --headless --path . --quit-after 2
 godot --headless --path . --export-debug "Windows Desktop" build/michi-td.exe
 ```
 
-Los tokens se mantienen en memoria y no se escriben en archivos del usuario.
+El access token se mantiene únicamente en memoria. Para reconocer al usuario al reabrir el juego se guarda solo el refresh token opaco en `user://session.cfg`; al cerrar sesión se revoca y se elimina.

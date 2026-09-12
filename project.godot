@@ -1,5 +1,5 @@
 [application]
-config/name="Michi TD"
+config/name="Michi"
 config/icon="res://assets/michi-td-icon.png"
 run/main_scene="res://src/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
