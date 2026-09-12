@@ -11,6 +11,7 @@ var verify_button: Button
 var resend_button: Button
 
 func setup(email: String) -> void:
+    add_theme_stylebox_override("panel", StyleBoxEmpty.new())
     var margin := MarginContainer.new()
     margin.add_theme_constant_override("margin_left", 64); margin.add_theme_constant_override("margin_right", 64); margin.add_theme_constant_override("margin_top", 68); margin.add_theme_constant_override("margin_bottom", 28)
     add_child(margin)
