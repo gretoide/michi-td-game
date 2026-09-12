@@ -1,1 +1,21 @@
-# michi-td
+# Michi TD Game
+
+Cliente de escritorio Godot 4.7.2 para Michi TD. Esta primera base permite registrarse o iniciar sesión y presenta una pantalla de bienvenida sobre un carrusel de fondos de fantasía con transiciones suaves.
+
+El juego usa una base de 1920×1080, arranca en una ventana de 1280×720 y escala el contenido para conservar la composición en resoluciones distintas. El acceso usa un panel translúcido con desenfoque de fondo y permite mostrar u ocultar la contraseña.
+
+## Desarrollo
+
+- Requiere Godot 4.7.2 estándar para Windows y la API ejecutándose en `http://127.0.0.1:3000`.
+- La URL de autenticación puede cambiarse con `MICHI_API_URL`; debe incluir el prefijo `/api/v1`.
+- Ejecutar desde esta carpeta: `godot --path .`
+
+## Validar y exportar
+
+```powershell
+godot --headless --path . --editor --quit
+godot --headless --path . --quit-after 2
+godot --headless --path . --export-debug "Windows Desktop" build/michi-td.exe
+```
+
+Los tokens se mantienen en memoria y no se escriben en archivos del usuario.

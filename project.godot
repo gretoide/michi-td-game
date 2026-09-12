@@ -1,0 +1,27 @@
+[application]
+config/name="Michi TD"
+config/icon="res://assets/michi-td-icon.png"
+run/main_scene="res://src/main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[display]
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+; Viewport base 1920x1080; la primera ejecución abre una ventana cómoda.
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/size/mode=0
+window/size/resizable=true
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+
+[autoload]
+SessionStore="*res://src/core/session/session_store.gd"
+
+[environment]
+defaults/default_clear_color=Color(0.055, 0.075, 0.12, 1)
