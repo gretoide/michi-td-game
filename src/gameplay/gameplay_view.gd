@@ -9,14 +9,35 @@ func setup(value: GameRuntime) -> void:
 	runtime = value
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var background := ColorRect.new(); background.color = Color("152238"); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(background)
-	var map_view := MapDebugView.new(); map_view.runtime = runtime; map_view.set_anchors_preset(Control.PRESET_FULL_RECT); map_view.offset_left = 40; map_view.offset_top = 70; map_view.offset_right = -40; map_view.offset_bottom = -70; background.add_child(map_view)
-	var hud := HBoxContainer.new(); hud.set_anchors_preset(Control.PRESET_TOP_WIDE); hud.offset_left = 24; hud.offset_top = 16; hud.offset_right = -24; hud.offset_bottom = 58; background.add_child(hud)
-	phase_label = Label.new(); phase_label.text = LocalizationService.tr_key("game.phase.construction"); phase_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hud.add_child(phase_label)
-	wave_label = Label.new(); wave_label.text = LocalizationService.tr_key("game.wave", {"number": 1}); hud.add_child(wave_label)
-	var locale := LocaleSelector.new(); locale.custom_minimum_size = Vector2(82,38); locale.setup(); hud.add_child(locale)
-	var pause := Button.new(); pause.text = "Ⅱ"; pause.tooltip_text = LocalizationService.tr_key("game.pause"); pause.pressed.connect(func(): get_tree().paused = not get_tree().paused); pause.process_mode = Node.PROCESS_MODE_ALWAYS; hud.add_child(pause)
+	var map_view := MapDebugView.new(); map_view.runtime = runtime; map_view.set_anchors_preset(Control.PRESET_FULL_RECT); map_view.offset_left = 40; map_view.offset_top = 70; map_view.offset_right = -340; map_view.offset_bottom = -70; background.add_child(map_view)
+	_add_gameplay_sprite(background, "res://assets/art/gameplay/tower_05.png", Vector2(64, 128), Vector2(64, 128), Vector2(140, 300))
+	_add_gameplay_sprite(background, "res://assets/art/gameplay/tower_05.png", Vector2(64, 128), Vector2(64, 128), Vector2(270, 300))
+	_add_gameplay_sprite(background, "res://assets/art/gameplay/orc_idle.png", Vector2(100, 100), Vector2(100, 100), Vector2(560, 220))
+	var hud := PanelContainer.new(); hud.set_anchors_preset(Control.PRESET_TOP_WIDE); hud.offset_left = 20; hud.offset_top = 12; hud.offset_right = -20; hud.offset_bottom = 64; hud.add_theme_stylebox_override("panel", _hud_panel()); background.add_child(hud)
+	var hud_row := HBoxContainer.new(); hud_row.add_theme_constant_override("separation", 14); hud.add_child(hud_row)
+	phase_label = Label.new(); phase_label.text = LocalizationService.tr_key("game.phase.construction"); phase_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hud_row.add_child(phase_label)
+	wave_label = Label.new(); wave_label.text = LocalizationService.tr_key("game.wave", {"number": 1}); hud_row.add_child(wave_label)
+	var locale := LocaleSelector.new(); locale.custom_minimum_size = Vector2(100,38); locale.setup()
+	hud_row.add_child(locale)
+	var pause := Button.new(); pause.custom_minimum_size = Vector2(42,38); pause.text = "Ⅱ"; pause.tooltip_text = LocalizationService.tr_key("game.pause"); pause.pressed.connect(func(): get_tree().paused = not get_tree().paused); pause.process_mode = Node.PROCESS_MODE_ALWAYS; hud_row.add_child(pause)
+	var harness := ConstructionHarness.new(); harness.setup(runtime); harness.anchor_left = 1.0; harness.anchor_right = 1.0; harness.offset_left = -300; harness.offset_top = 76; harness.offset_right = -24; harness.offset_bottom = 450; background.add_child(harness)
+	runtime.construction.gem_placed.connect(func(_gem: GemInstance): map_view.queue_redraw())
+	runtime.construction.stone_created.connect(func(_stone: StoneInstance): map_view.queue_redraw())
+	runtime.construction.construction_changed.connect(func(_count: int, _total: int): map_view.queue_redraw())
 	runtime.phases.phase_entered.connect(_on_phase)
 	LocalizationService.locale_changed.connect(func(_locale: String): _on_phase(runtime.phases.phase))
+
+func _hud_panel() -> StyleBoxTexture:
+	var panel := StyleBoxTexture.new()
+	panel.texture = load("res://assets/art/gameplay/hud_blue.png")
+	panel.texture_margin_left = 8.0; panel.texture_margin_top = 8.0; panel.texture_margin_right = 8.0; panel.texture_margin_bottom = 8.0
+	panel.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
+	panel.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
+	return panel
+
+func _add_gameplay_sprite(parent: Control, path: String, size: Vector2, region_size: Vector2, position: Vector2) -> void:
+	var atlas := AtlasTexture.new(); atlas.atlas = load(path); atlas.region = Rect2(Vector2.ZERO, region_size)
+	var sprite := TextureRect.new(); sprite.texture = atlas; sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; sprite.size = size; sprite.position = position; sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE; parent.add_child(sprite)
 
 func _on_phase(value: GamePhaseMachine.Phase) -> void:
 	phase_label.text = LocalizationService.tr_key("game.phase.construction" if value == GamePhaseMachine.Phase.CONSTRUCTION else "game.phase.combat")
@@ -24,6 +45,16 @@ func _on_phase(value: GamePhaseMachine.Phase) -> void:
 
 class MapDebugView extends Control:
 	var runtime: GameRuntime
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and runtime != null:
+			var scale_value := minf(get_rect().size.x, get_rect().size.y) / 36.0
+			var cell := Vector2i(floori(event.position.x / scale_value), floori(event.position.y / scale_value))
+			runtime.construction.place_gem(cell, int(runtime.player_state.player_level))
+			queue_redraw()
+
 	func _draw() -> void:
 		if runtime == null: return
 		var area := get_rect().size
@@ -34,3 +65,15 @@ class MapDebugView extends Control:
 		for index in range(points.size()):
 			var point := (Vector2(points[index]) + Vector2.ONE * 0.5) * scale_value
 			draw_circle(point, 7.0, Color("65d6a6") if index > 0 and index < points.size() - 1 else Color("f2c14e"))
+		for gem: GemInstance in runtime.construction.board_gems:
+			var gem_point := (Vector2(gem.cell) + Vector2.ONE * 0.5) * scale_value
+			draw_circle(gem_point, 9.0, _gem_color(gem))
+			draw_circle(gem_point, 11.0, Color(1, 1, 1, 0.8), false, 2.0)
+		for cell: Vector2i in runtime.construction.stones:
+			var stone_point := (Vector2(cell) + Vector2.ONE * 0.5) * scale_value
+			draw_circle(stone_point, 8.0, Color("8b8f9a"))
+			draw_circle(stone_point, 10.0, Color(0.2, 0.2, 0.25, 0.9), false, 2.0)
+
+	func _gem_color(gem: GemInstance) -> Color:
+		var colors := {&"amethyst": Color("b78cff"), &"aquamarine": Color("68d8e8"), &"diamond": Color("e9f6ff"), &"emerald": Color("55d889"), &"opal": Color("f3a7d8"), &"ruby": Color("ef6262"), &"sapphire": Color("6598ff"), &"topaz": Color("f4c95d")}
+		return colors.get(gem.id, Color("ffffff"))

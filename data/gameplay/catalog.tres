@@ -1,4 +1,4 @@
-[gd_resource type="Resource" load_steps=8 format=3]
+[gd_resource type="Resource" load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://src/core/data/model/gameplay_catalog.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://src/core/data/model/global_config.gd" id="2_globals"]
@@ -20,6 +20,48 @@ id = &"amethyst"
 display_name = "Amethyst"
 levels = [{"level": 1, "quality": "Chipped", "ability": "Pierce 1", "range": 500.0, "damage": 2.0, "attack_speed": 283.0}]
 
+[sub_resource type="Resource" id="GemDefinition_aquamarine"]
+script = ExtResource("3_gem")
+id = &"aquamarine"
+display_name = "Aquamarine"
+levels = [{"level": 1, "quality": "Chipped", "range": 500.0, "damage": 2.0, "attack_speed": 350.0}]
+
+[sub_resource type="Resource" id="GemDefinition_diamond"]
+script = ExtResource("3_gem")
+id = &"diamond"
+display_name = "Diamond"
+levels = [{"level": 1, "quality": "Chipped", "range": 500.0, "damage": 3.0, "attack_speed": 250.0}]
+
+[sub_resource type="Resource" id="GemDefinition_emerald"]
+script = ExtResource("3_gem")
+id = &"emerald"
+display_name = "Emerald"
+levels = [{"level": 1, "quality": "Chipped", "range": 500.0, "damage": 2.0, "attack_speed": 250.0}]
+
+[sub_resource type="Resource" id="GemDefinition_opal"]
+script = ExtResource("3_gem")
+id = &"opal"
+display_name = "Opal"
+levels = [{"level": 1, "quality": "Chipped", "range": 500.0, "damage": 2.0, "attack_speed": 250.0}]
+
+[sub_resource type="Resource" id="GemDefinition_ruby"]
+script = ExtResource("3_gem")
+id = &"ruby"
+display_name = "Ruby"
+levels = [{"level": 1, "quality": "Chipped", "range": 500.0, "damage": 3.0, "attack_speed": 200.0}]
+
+[sub_resource type="Resource" id="GemDefinition_sapphire"]
+script = ExtResource("3_gem")
+id = &"sapphire"
+display_name = "Sapphire"
+levels = [{"level": 1, "quality": "Chipped", "range": 500.0, "damage": 2.0, "attack_speed": 250.0}]
+
+[sub_resource type="Resource" id="GemDefinition_topaz"]
+script = ExtResource("3_gem")
+id = &"topaz"
+display_name = "Topaz"
+levels = [{"level": 1, "quality": "Chipped", "range": 500.0, "damage": 2.0, "attack_speed": 250.0}]
+
 [sub_resource type="Resource" id="RecipeDefinition_silver"]
 script = ExtResource("4_recipe")
 id = &"silver"
@@ -30,6 +72,20 @@ secret = false
 range_units = 600.0
 damage = 30.0
 attack_speed = 170.0
+
+[sub_resource type="Resource" id="RecipeDefinition_fixture_advanced"]
+script = ExtResource("4_recipe")
+id = &"fixture_advanced"
+result_id = &"silver"
+ingredients = [{"id": &"sapphire", "level": 1}, {"id": &"topaz", "level": 1}, {"id": &"diamond", "level": 1}]
+secret = false
+
+[sub_resource type="Resource" id="RecipeDefinition_fixture_secret"]
+script = ExtResource("4_recipe")
+id = &"fixture_secret"
+result_id = &"silver"
+ingredients = [{"id": &"emerald", "level": 1}, {"id": &"ruby", "level": 1}]
+secret = true
 
 [sub_resource type="Resource" id="EnemyProfileDefinition_pig"]
 script = ExtResource("5_enemy")
@@ -55,7 +111,7 @@ spawn_interval = 1.0
 script = ExtResource("1_catalog")
 schema_version = 1
 globals = SubResource("GlobalConfig_bootstrap")
-gems = Array[ExtResource("3_gem")]([SubResource("GemDefinition_amethyst")])
-recipes = Array[ExtResource("4_recipe")]([SubResource("RecipeDefinition_silver")])
+gems = Array[ExtResource("3_gem")]([SubResource("GemDefinition_amethyst"), SubResource("GemDefinition_aquamarine"), SubResource("GemDefinition_diamond"), SubResource("GemDefinition_emerald"), SubResource("GemDefinition_opal"), SubResource("GemDefinition_ruby"), SubResource("GemDefinition_sapphire"), SubResource("GemDefinition_topaz")])
+recipes = Array[ExtResource("4_recipe")]([SubResource("RecipeDefinition_silver"), SubResource("RecipeDefinition_fixture_advanced"), SubResource("RecipeDefinition_fixture_secret")])
 enemy_profiles = Array[ExtResource("5_enemy")]([SubResource("EnemyProfileDefinition_pig")])
 waves = Array[ExtResource("6_wave")]([SubResource("WaveDefinition_one")])

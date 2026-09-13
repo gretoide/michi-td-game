@@ -32,7 +32,8 @@ const EXTRA_CATALOG := {
         "error.game_start": "The game could not start: {detail}"
         ,"password.show": "Show password", "password.hide": "Hide password",
         "game.phase.construction": "Construction", "game.phase.combat": "Combat",
-        "game.wave": "Wave {number}", "game.pause": "Pause"
+        "game.wave": "Wave {number}", "game.pause": "Pause",
+        "game.harness.title": "Construction harness", "game.harness.place": "Place Gem", "game.harness.keep": "Keep first", "game.harness.combine": "Combine basic", "game.harness.degrade": "Degrade", "game.harness.remove": "Remove Stone", "game.harness.status": "Gems {gems}/5 | Stones {stones} | Phase {phase}", "game.harness.rejected": "Rejected: {code}", "game.harness.finalized": "Construction finalized"
     },
     "es": {
         "verification.hint": "Enviamos un código a {email}\nTiene una validez de 15 minutos.",
@@ -55,7 +56,8 @@ const EXTRA_CATALOG := {
         "error.game_start": "No se pudo iniciar la partida: {detail}"
         ,"password.show": "Mostrar contraseña", "password.hide": "Ocultar contraseña",
         "game.phase.construction": "Construcción", "game.phase.combat": "Combate",
-        "game.wave": "Oleada {number}", "game.pause": "Pausa"
+        "game.wave": "Oleada {number}", "game.pause": "Pausa",
+        "game.harness.title": "Panel de construcción", "game.harness.place": "Colocar gema", "game.harness.keep": "Conservar primera", "game.harness.combine": "Combinar básica", "game.harness.degrade": "Degradar", "game.harness.remove": "Eliminar piedra", "game.harness.status": "Gemas {gems}/5 | Piedras {stones} | Fase {phase}", "game.harness.rejected": "Rechazado: {code}", "game.harness.finalized": "Construcción finalizada"
     }
 }
 

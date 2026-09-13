@@ -9,6 +9,9 @@ var map: MapLayout
 var pathfinder: GroundPathfinder
 var phases: GamePhaseMachine
 var wave: WaveRuntime
+var gem_generator: GemGenerator
+var construction: ConstructionRuntime
+var mvp: MvpState
 var player_state: Dictionary
 
 func initialize(seed: int = -1) -> PackedStringArray:
@@ -28,6 +31,11 @@ func initialize(seed: int = -1) -> PackedStringArray:
 	if pathfinder.find_route(map).is_empty(): return PackedStringArray(["Initial Ground route is invalid"])
 	phases = GamePhaseMachine.new(); phases.reset()
 	wave = WaveRuntime.new()
+	gem_generator = GemGenerator.new(foundation.random)
+	mvp = MvpState.new()
+	construction = ConstructionRuntime.new()
+	construction.setup(grid, pathfinder, phases, gem_generator, foundation.catalog.recipes, map)
+	construction.begin_round(1)
 	player_state = {"wave": 1, "lives": 1000, "max_lives": 1000, "score": 0, "gold": 0, "xp": 0, "player_level": 1, "progress": 50.0, "base_enemy_count": 10, "support_skills": {}}
 	return PackedStringArray()
 

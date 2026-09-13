@@ -218,6 +218,7 @@ func _set_mode_button_text(hover := false) -> void:
     mode_button_label.text = "[center][color=#321c12]%s[/color] [b][color=#%s]%s[/color][/b][/center]" % [prompt, action_color, action]
 
 func _open_auth(register: bool) -> void:
+    global_controls_layer.visible = true
     parchment_brightener.visible = false
     access_state = AccessState.REGISTER if register else AccessState.LOGIN
     register_mode = register
@@ -235,6 +236,7 @@ func _open_auth(register: bool) -> void:
     message_label.text = ""
     _fade_content()
 func _show_landing() -> void:
+    global_controls_layer.visible = true
     _hide_session_loader()
     parchment_brightener.visible = false
     access_state = AccessState.LANDING
@@ -275,6 +277,9 @@ func _start_new_game() -> void:
         _on_auth_failed(LocalizationService.tr_key("error.game_start", {"detail": "; ".join(errors)}))
         return
     access_state = AccessState.AUTHENTICATED_HOME
+    # The gameplay HUD owns pause and locale controls. Keep the auth shell's
+    # global controls hidden so selectors are never rendered twice.
+    global_controls_layer.visible = false
     root_ui.visible = false; back_button.visible = false; glass_panel.visible = false
     if is_instance_valid(verification): verification.queue_free()
     if is_instance_valid(welcome): welcome.queue_free()
@@ -282,6 +287,7 @@ func _start_new_game() -> void:
     gameplay_view = GameplayView.new(); gameplay_view.setup(game_runtime); add_child(gameplay_view)
 func _on_verification_required(email: String) -> void: submit_button.disabled = false; verification_email = email if email != "" else email_input.text.strip_edges(); verification_password = password_input.text; _show_verification()
 func _show_verification() -> void:
+    global_controls_layer.visible = true
     access_state = AccessState.VERIFY_EMAIL; glass_panel.custom_minimum_size = Vector2(640,520); parchment_brightener.visible = false; root_ui.visible = false; back_button.visible = true; verification = EmailVerificationView.new(); verification.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); verification.setup(verification_email); verification.verify_requested.connect(_verify_code); verification.resend_requested.connect(_resend_code); parchment_panel.add_child(verification)
 func _verify_code(code: String) -> void:
     if code.length() != 6 or not code.is_valid_int(): verification.show_message(LocalizationService.tr_key("verification.invalid_code")); return
@@ -309,6 +315,7 @@ func _show_welcome(alias := "") -> void:
     parchment_brightener.visible = false
     var display_alias := alias if not alias.is_empty() else str(SessionStore.user.get("alias", "jugador"))
     access_state = AccessState.AUTHENTICATED_HOME
+    global_controls_layer.visible = false
     root_ui.visible = false
     back_button.visible = false
     if is_instance_valid(verification):
