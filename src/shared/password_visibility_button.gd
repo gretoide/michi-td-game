@@ -32,4 +32,4 @@ func set_revealed(value: bool) -> void:
 
 func _update_icon() -> void:
     icon = load("res://assets/ui/cursors/password_eye_visible.png" if revealed else "res://assets/ui/cursors/password_eye_hidden.png") as Texture2D
-    tooltip_text = "Ocultar contraseña" if revealed else "Mostrar contraseña"
+    tooltip_text = LocalizationService.tr_key("password.hide" if revealed else "password.show")

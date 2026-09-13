@@ -17,7 +17,7 @@ func setup(api: ApiClient) -> void:
 
 func register(alias: String, email: String, password: String) -> void:
     _action = "register"
-    _api.post_json("/auth/register", {"alias": alias, "email": email, "password": password})
+    _api.post_json("/auth/register", {"alias": alias, "email": email, "password": password, "locale": LocalizationService.locale})
 
 func login(email: String, password: String) -> void:
     _action = "login"
@@ -50,9 +50,11 @@ func _on_api_completed(success: bool, _status: int, data: Variant, error: String
     _action = ""
     if success and action == "verify" and data is Dictionary and data.has("accessToken"):
         SessionStore.set_session(data)
+        LocalizationService.set_locale(str((data.get("user", {}) as Dictionary).get("locale", LocalizationService.locale)))
         verification_succeeded.emit(data)
     elif success and data is Dictionary and data.has("accessToken"):
         SessionStore.set_session(data)
+        LocalizationService.set_locale(str((data.get("user", {}) as Dictionary).get("locale", LocalizationService.locale)))
         if action == "restore":
             succeeded.emit(data)
         else:

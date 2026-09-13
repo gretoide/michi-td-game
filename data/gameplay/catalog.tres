@@ -1,0 +1,61 @@
+[gd_resource type="Resource" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://src/core/data/model/gameplay_catalog.gd" id="1_catalog"]
+[ext_resource type="Script" path="res://src/core/data/model/global_config.gd" id="2_globals"]
+[ext_resource type="Script" path="res://src/core/data/model/gem_definition.gd" id="3_gem"]
+[ext_resource type="Script" path="res://src/core/data/model/recipe_definition.gd" id="4_recipe"]
+[ext_resource type="Script" path="res://src/core/data/model/enemy_profile_definition.gd" id="5_enemy"]
+[ext_resource type="Script" path="res://src/core/data/model/wave_definition.gd" id="6_wave"]
+
+[sub_resource type="Resource" id="GlobalConfig_bootstrap"]
+script = ExtResource("2_globals")
+schema_version = 1
+projectile_speed = 1000.0
+default_enemy_speed = 250.0
+default_seed = 0
+
+[sub_resource type="Resource" id="GemDefinition_amethyst"]
+script = ExtResource("3_gem")
+id = &"amethyst"
+display_name = "Amethyst"
+levels = [{"level": 1, "quality": "Chipped", "ability": "Pierce 1", "range": 500.0, "damage": 2.0, "attack_speed": 283.0}]
+
+[sub_resource type="Resource" id="RecipeDefinition_silver"]
+script = ExtResource("4_recipe")
+id = &"silver"
+result_id = &"silver"
+ability_ids = PackedStringArray("slow_2")
+ingredients = [{"id": &"amethyst", "level": 1}]
+secret = false
+range_units = 600.0
+damage = 30.0
+attack_speed = 170.0
+
+[sub_resource type="Resource" id="EnemyProfileDefinition_pig"]
+script = ExtResource("5_enemy")
+id = &"frenzied_pig"
+display_name = "Frenzied Pig"
+movement_type = "Ground"
+hp = 3.0
+base_speed = 250.0
+armor = 0.0
+magic_resistance = 10.0
+attack = 1.0
+xp_reward = 48
+
+[sub_resource type="Resource" id="WaveDefinition_one"]
+script = ExtResource("6_wave")
+number = 1
+enemy_profile_id = &"frenzied_pig"
+boss = false
+spawn_count = 1
+spawn_interval = 1.0
+
+[resource]
+script = ExtResource("1_catalog")
+schema_version = 1
+globals = SubResource("GlobalConfig_bootstrap")
+gems = Array[ExtResource("3_gem")]([SubResource("GemDefinition_amethyst")])
+recipes = Array[ExtResource("4_recipe")]([SubResource("RecipeDefinition_silver")])
+enemy_profiles = Array[ExtResource("5_enemy")]([SubResource("EnemyProfileDefinition_pig")])
+waves = Array[ExtResource("6_wave")]([SubResource("WaveDefinition_one")])

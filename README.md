@@ -12,6 +12,13 @@ El carrusel alterna sus ilustraciones cada 8 segundos con un crossfade suave. Lo
 - La URL de autenticación puede cambiarse con `MICHI_API_URL`; debe incluir el prefijo `/api/v1`.
 - Ejecutar desde esta carpeta: `godot --path .`
 
+La foundation de gameplay usa catálogos tipados `.tres` en `data/gameplay`. Para validar sus contratos y el RNG determinista:
+
+```powershell
+godot --headless --path . --script res://test/foundation/run.gd
+godot --headless --path . --script res://test/gameplay/m1/run.gd
+```
+
 ## Validar y exportar
 
 ```powershell
@@ -20,4 +27,4 @@ godot --headless --path . --quit-after 2
 godot --headless --path . --export-debug "Windows Desktop" build/michi-td.exe
 ```
 
-El access token se mantiene únicamente en memoria. Para reconocer al usuario al reabrir el juego se guarda solo el refresh token opaco en `user://session.cfg`; al cerrar sesión se revoca y se elimina.
+El access token se mantiene únicamente en memoria. Para reconocer al usuario al reabrir el juego se guarda solo el refresh token opaco en `user://session.cfg`; al cerrar sesión se revoca y se elimina. El idioma se guarda por separado en `user://preferences.cfg` y se conserva al crear una partida nueva.

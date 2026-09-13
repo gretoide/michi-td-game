@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="MapLayout" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/gameplay/map/map_layout.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+spawn = Vector2i(5, 3)
+checkpoints = Array[Vector2i]([Vector2i(5, 19), Vector2i(32, 19), Vector2i(32, 5), Vector2i(19, 5), Vector2i(19, 32)])
+endpoint = Vector2i(33, 32)

@@ -1,0 +1,35 @@
+extends RefCounted
+
+func run(suite: FoundationTestSuite) -> void:
+	var grid := GridModel.new()
+	var layout := load("res://data/gameplay/initial_map.tres") as MapLayout
+	suite.expect_equal(layout.checkpoints.size(), 5, "map has five checkpoints")
+	suite.expect_equal(layout.spawn, Vector2i(5,3), "map uses canonical spawn")
+	suite.expect_equal(layout.endpoint, Vector2i(33,32), "map uses canonical endpoint")
+	suite.expect(layout.validate_for(grid).is_empty(), "canonical map fits the grid")
+	var pathfinder := GroundPathfinder.new(grid)
+	var direct := pathfinder.find_route(layout)
+	suite.expect(not direct.is_empty(), "ground route reaches all waypoints")
+	grid.occupy(Vector2i(5,10))
+	var detour := pathfinder.find_route(layout)
+	suite.expect(not detour.is_empty() and detour.size() > direct.size(), "ground route detours around occupancy")
+	grid.release(Vector2i(5,10))
+	suite.expect_equal(pathfinder.find_route(layout), direct, "ground route is restored after releasing occupancy")
+	for x in range(GridModel.WIDTH): grid.block(Vector2i(x,10))
+	suite.expect(pathfinder.find_route(layout).is_empty(), "total barrier is detected")
+	var invalid_layout := MapLayout.new()
+	invalid_layout.spawn = Vector2i(-1,3)
+	invalid_layout.checkpoints = [Vector2i(5,19), Vector2i(5,19), Vector2i(32,5), Vector2i(19,5), Vector2i(19,32)]
+	invalid_layout.endpoint = Vector2i(33,32)
+	var invalid_errors := invalid_layout.validate_for(GridModel.new())
+	suite.expect(not invalid_errors.is_empty(), "invalid or duplicated map coordinates report clear errors")
+	var flying := EnemyNavigator.flying_cells(layout)
+	suite.expect_equal(flying.size(), 7, "flying path keeps spawn, five checkpoints and end")
+	suite.expect_equal(flying[1], layout.checkpoints[0], "flying path preserves checkpoint order")
+	var navigator := EnemyNavigator.new(); navigator.setup(flying, GridModel.new(), 10000.0)
+	var state := {"checkpoints": 0, "ended": false}
+	navigator.checkpoint_reached.connect(func(_index: int): state.checkpoints += 1)
+	navigator.finished.connect(func(): state.ended = true)
+	for index in range(20): navigator.tick(1.0)
+	suite.expect_equal(state.checkpoints, 5, "navigator emits five checkpoint events")
+	suite.expect(state.ended, "navigator emits end event")
