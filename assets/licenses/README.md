@@ -12,5 +12,8 @@ Inventario de los recursos que forman parte del runtime actual. Fecha de revisi�
 | Fantasy Wooden GUI | `assets/ui/panels/*.png`, `assets/ui/icons/alert_error.png` | No consta licencia gráfica local | Pendiente de verificar | Pendiente |
 | Rustic pack | `assets/ui/buttons/*.png`, `assets/ui/icons/decorative_stud.png`, `assets/ui/icons/music_*.png`, `assets/ui/decorations/title_sign.png` | No consta licencia local | Pendiente de verificar | Pendiente |
 | Medieval pack 2 | `assets/ui/icons/back.png` | Kibyra; ver `kibyra-medieval-pack-2.txt` | Uso personal y comercial; no redistribuir el pack tal cual | Crédito apreciado, no requerido |
+| Kenney Cursor Pixel Pack | `assets/ui/cursors/*.png` | Kenney; https://www.kenney.nl/ | CC0 | Atribución opcional: Kenney / www.kenney.nl |
+| Kenney Interface Sounds | `assets/audio/ui/*.ogg` | Kenney; https://www.kenney.nl/ | CC0 | Atribución opcional: Kenney / www.kenney.nl |
+| Kenney UI Pack RPG Expansion (panel marrón) | `assets/ui/panels/rpg_panel_brown.png` | Kenney; https://www.kenney.nl/ | CC0 | Atribución opcional: Kenney / www.kenney.nl |
 
 No se conserva Buddy Champion: su EULA sólo cubría esa familia tipográfica y no se debe aplicar a los gráficos Fantasy Wooden GUI.

@@ -38,6 +38,7 @@ func setup(alias := "jugador") -> void:
     enter.add_theme_color_override("font_hover_color", Color("ffd56a"))
     enter.add_theme_color_override("font_outline_color", Color("3a2116"))
     enter.add_theme_constant_override("outline_size", 2)
+    CursorManager.set_clickable(enter)
     column.add_child(enter)
 
 func _button_style(path: String, tint := Color.WHITE) -> StyleBoxTexture:

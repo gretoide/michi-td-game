@@ -36,14 +36,17 @@ var register_mode := true
 var home_music: AudioStreamPlayer
 var music_toggle_button: Button
 var session_loader: Control
-var session_loader_tween: Tween
+var session_loader_timer: Timer
+var session_loader_frames: Array[Texture2D] = []
 
 func _ready() -> void:
     api = ApiClient.new(); add_child(api)
     auth = AuthService.new(); add_child(auth); auth.setup(api)
+    api.request_started.connect(func(): CursorManager.set_busy(true))
+    api.completed.connect(func(_success, _status, _data, _error): CursorManager.set_busy(false))
     auth.succeeded.connect(_on_auth_succeeded); auth.failed.connect(_on_auth_failed)
     auth.verification_required.connect(_on_verification_required); auth.verification_succeeded.connect(_on_auth_succeeded); auth.resend_succeeded.connect(_on_resend_succeeded)
-    auth.restore_failed.connect(_show_landing)
+    auth.restore_failed.connect(func(): UiSoundManager.play_error(); _show_landing())
     _build_ui(); _start_home_music()
     if SessionStore.restore_refresh_token():
         _show_session_loader()
@@ -90,7 +93,7 @@ func _build_ui() -> void:
     alias_input = _create_input("Alias",false); alias_input.visible = false; root_ui.add_child(alias_input)
     email_input = _create_input("Email",false); email_input.visible = false; root_ui.add_child(email_input)
     password_input = _create_input("Contraseña",true); password_row = HBoxContainer.new(); password_row.add_theme_constant_override("separation",8); password_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL; password_row.add_child(password_input)
-    password_visibility_button = PasswordVisibilityButton.new(); password_visibility_button.custom_minimum_size = Vector2(48,42); password_visibility_button.toggled.connect(_toggle_password_visibility); password_row.add_child(password_visibility_button); password_row.visible = false; root_ui.add_child(password_row)
+    password_visibility_button = PasswordVisibilityButton.new(); password_visibility_button.custom_minimum_size = Vector2(48,42); password_visibility_button.connect("toggled", _toggle_password_visibility); _update_password_visibility_icon(); CursorManager.set_clickable(password_visibility_button); password_row.add_child(password_visibility_button); password_row.visible = false; root_ui.add_child(password_row)
     submit_button = Button.new(); submit_button.custom_minimum_size = Vector2(0,54); _style_action_button(submit_button,true); submit_button.pressed.connect(_submit_auth); submit_button.visible = false; root_ui.add_child(submit_button)
     mode_button = Button.new(); mode_button.flat = true; mode_button.custom_minimum_size = Vector2(0,38); mode_button.pressed.connect(_toggle_mode); mode_button.mouse_entered.connect(func(): _set_mode_button_text(true)); mode_button.mouse_exited.connect(func(): _set_mode_button_text(false)); mode_button.visible = false; _style_link_button(mode_button); root_ui.add_child(mode_button)
     mode_button_label = RichTextLabel.new(); mode_button_label.bbcode_enabled = true; mode_button_label.fit_content = true; mode_button_label.scroll_active = false; mode_button_label.mouse_filter = Control.MOUSE_FILTER_IGNORE; mode_button_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); mode_button_label.offset_top = 3; mode_button_label.offset_bottom = -3; mode_button_label.add_theme_font_size_override("normal_font_size",20); mode_button.add_child(mode_button_label)
@@ -100,16 +103,13 @@ func _build_ui() -> void:
     var alert_row := HBoxContainer.new(); alert_row.alignment = BoxContainer.ALIGNMENT_CENTER; alert_row.add_theme_constant_override("separation",14); alert_margin.add_child(alert_row)
     var alert_icon := TextureRect.new(); alert_icon.texture = load("res://assets/ui/icons/alert_error.png"); alert_icon.custom_minimum_size = Vector2(44,44); alert_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; alert_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; alert_row.add_child(alert_icon)
     message_label = Label.new(); message_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; message_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; message_label.add_theme_color_override("font_color",Color("fff1d0")); message_label.add_theme_font_size_override("font_size",17); alert_row.add_child(message_label); panel_stack.add_child(message_panel)
-    back_button = Button.new(); back_button.text = "Volver"; back_button.icon = load("res://assets/ui/icons/back.png"); back_button.expand_icon = true; back_button.custom_minimum_size = Vector2(150,44); back_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; _style_action_button(back_button,false); back_button.visible = false; back_button.pressed.connect(_show_landing); panel_stack.add_child(back_button)
+    back_button = Button.new(); back_button.text = "Volver"; back_button.icon = load("res://assets/ui/cursors/back_arrow.png"); back_button.expand_icon = false; back_button.add_theme_constant_override("icon_max_width",16); back_button.custom_minimum_size = Vector2(150,44); back_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; _style_action_button(back_button,false); back_button.visible = false; back_button.pressed.connect(_show_landing); panel_stack.add_child(back_button)
     _create_music_toggle()
 
 func _create_title_sign() -> void:
-    var sign := PanelContainer.new(); sign.z_index = 10; sign.mouse_filter = Control.MOUSE_FILTER_IGNORE; sign.anchor_left = 0.5; sign.anchor_right = 0.5; sign.offset_left = -190; sign.offset_right = 190; sign.offset_top = -52; sign.offset_bottom = 72; sign.add_theme_stylebox_override("panel",_wood_style("res://assets/ui/decorations/title_sign.png")); glass_panel.add_child(sign)
-    var row := HBoxContainer.new(); row.alignment = BoxContainer.ALIGNMENT_CENTER; row.add_theme_constant_override("separation",18); sign.add_child(row); row.add_child(_create_sign_stud())
-    var title := Label.new(); title.text = "Michi"; title.custom_minimum_size = Vector2(250,0); title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",72); title.add_theme_font_override("font",load("res://assets/fonts/kelmscott.ttf")); title.add_theme_color_override("font_color",Color("fff3d6")); row.add_child(title); row.add_child(_create_sign_stud())
-
-func _create_sign_stud() -> TextureRect:
-    var stud := TextureRect.new(); stud.texture = load("res://assets/ui/icons/decorative_stud.png"); stud.custom_minimum_size = Vector2(26,26); stud.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; stud.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; stud.mouse_filter = Control.MOUSE_FILTER_IGNORE; return stud
+    var sign := PanelContainer.new(); sign.z_index = 10; sign.mouse_filter = Control.MOUSE_FILTER_IGNORE; sign.anchor_left = 0.5; sign.anchor_right = 0.5; sign.offset_left = -190; sign.offset_right = 190; sign.offset_top = -52; sign.offset_bottom = 72; sign.add_theme_stylebox_override("panel",_texture_style("res://assets/ui/panels/rpg_panel_brown.png",16)); glass_panel.add_child(sign)
+    var row := HBoxContainer.new(); row.alignment = BoxContainer.ALIGNMENT_CENTER; sign.add_child(row)
+    var title := Label.new(); title.text = "Michi TD"; title.custom_minimum_size = Vector2(300,0); title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",72); title.add_theme_font_override("font",load("res://assets/fonts/comic_neue_sans_id.ttf")); title.add_theme_color_override("font_color",Color("fff3d6")); row.add_child(title)
 
 func _wood_style(path: String) -> StyleBoxTexture:
     var style := StyleBoxTexture.new(); style.texture = load(path); style.texture_margin_left = 8; style.texture_margin_right = 8; style.texture_margin_top = 8; style.texture_margin_bottom = 8; style.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE; style.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE; return style
@@ -123,6 +123,7 @@ func _texture_style(path: String, margin: float, tint := Color.WHITE) -> StyleBo
     return style
 
 func _style_action_button(button: Button, primary: bool) -> void:
+    CursorManager.set_clickable(button)
     var normal := "res://assets/ui/buttons/button_normal.png"
     var hover := "res://assets/ui/buttons/button_hover.png"
     button.add_theme_stylebox_override("normal",_texture_style(normal,7))
@@ -134,6 +135,7 @@ func _style_action_button(button: Button, primary: bool) -> void:
     button.add_theme_color_override("font_pressed_color",Color("fff3d6"))
 
 func _style_link_button(button: Button) -> void:
+    CursorManager.set_clickable(button)
     var empty := StyleBoxEmpty.new()
     button.add_theme_stylebox_override("normal", empty)
     button.add_theme_stylebox_override("hover", empty)
@@ -144,7 +146,7 @@ func _create_input(placeholder: String, secret: bool) -> LineEdit:
     var field := LineEdit.new(); field.placeholder_text = placeholder; field.custom_minimum_size = Vector2(0,44); field.secret = secret; var normal := StyleBoxFlat.new(); normal.bg_color = Color("241913"); normal.border_color = Color("5f3826"); normal.set_border_width_all(2); normal.set_corner_radius_all(4); normal.content_margin_left = 14; normal.content_margin_right = 14; normal.content_margin_top = 8; normal.content_margin_bottom = 8; var focus := normal.duplicate() as StyleBoxFlat; focus.border_color = Color("c87a35"); field.add_theme_stylebox_override("normal",normal); field.add_theme_stylebox_override("focus",focus); field.add_theme_color_override("font_color",Color("fff3d6")); field.add_theme_color_override("font_placeholder_color",Color(0.92,0.86,0.76,0.72)); return field
 
 func _create_music_toggle() -> void:
-    music_toggle_button = Button.new(); music_toggle_button.z_index = 50; music_toggle_button.flat = true; music_toggle_button.expand_icon = true; music_toggle_button.add_theme_constant_override("icon_max_width",44); music_toggle_button.custom_minimum_size = Vector2(68,68); music_toggle_button.set_anchors_preset(Control.PRESET_TOP_RIGHT); music_toggle_button.offset_left = -92; music_toggle_button.offset_top = 24; music_toggle_button.offset_right = -24; music_toggle_button.offset_bottom = 92; music_toggle_button.pressed.connect(_toggle_home_music); add_child(music_toggle_button)
+    music_toggle_button = Button.new(); music_toggle_button.z_index = 50; music_toggle_button.flat = true; music_toggle_button.expand_icon = true; music_toggle_button.add_theme_constant_override("icon_max_width",44); music_toggle_button.custom_minimum_size = Vector2(68,68); music_toggle_button.set_anchors_preset(Control.PRESET_TOP_RIGHT); music_toggle_button.offset_left = -92; music_toggle_button.offset_top = 24; music_toggle_button.offset_right = -24; music_toggle_button.offset_bottom = 92; music_toggle_button.pressed.connect(_toggle_home_music); CursorManager.set_clickable(music_toggle_button); add_child(music_toggle_button)
 func _toggle_home_music() -> void:
     if is_instance_valid(home_music): home_music.stream_paused = not home_music.stream_paused
     _update_music_toggle()
@@ -152,7 +154,16 @@ func _update_music_toggle() -> void:
     if not is_instance_valid(music_toggle_button): return
     var playing := is_instance_valid(home_music) and not home_music.stream_paused; music_toggle_button.icon = load("res://assets/ui/icons/music_enabled.png" if playing else "res://assets/ui/icons/music_disabled.png"); music_toggle_button.tooltip_text = "Pausar música" if playing else "Reproducir música"
 
-func _toggle_password_visibility(visible: bool) -> void: password_input.secret = not visible
+func _toggle_password_visibility(visible: bool) -> void:
+    password_input.secret = not visible
+    _update_password_visibility_icon()
+
+func _update_password_visibility_icon() -> void:
+    if not is_instance_valid(password_visibility_button) or not is_instance_valid(password_input):
+        return
+    var visible := not password_input.secret
+    var texture := load("res://assets/ui/cursors/password_eye_visible.png" if visible else "res://assets/ui/cursors/password_eye_hidden.png") as Texture2D
+    password_visibility_button.call("set_revealed", visible)
 func _toggle_mode() -> void: _open_auth(not register_mode)
 
 func _set_mode_button_text(hover := false) -> void:
@@ -213,6 +224,7 @@ func _submit_auth() -> void:
     if register_mode: verification_email = email_input.text.strip_edges(); verification_password = password_input.text; auth.register(alias_input.text,email_input.text,password_input.text)
     else: auth.login(email_input.text,password_input.text)
 func _on_auth_succeeded(session: Dictionary) -> void:
+    UiSoundManager.play_confirmation()
     submit_button.disabled = false
     var session_user := session.get("user", {}) as Dictionary
     _show_welcome(str(session_user.get("alias", SessionStore.user.get("alias", "jugador"))))
@@ -224,10 +236,17 @@ func _verify_code(code: String) -> void:
     verification.set_busy(true); auth.verify_email(verification_email,code)
 func _resend_code() -> void: verification.set_busy(true); auth.resend_verification(verification_email,verification_password)
 func _on_resend_succeeded() -> void:
+    UiSoundManager.play_confirmation()
     if is_instance_valid(verification): verification.set_busy(false); verification.show_message("Código reenviado. Revisá tu bandeja de entrada.", false)
 func _on_auth_failed(error: String) -> void:
+    UiSoundManager.play_error()
     submit_button.disabled = false
     if is_instance_valid(verification): verification.set_busy(false); verification.show_message(_friendly_error(error)); return
+    var lower := error.to_lower()
+    if register_mode and not verification_email.is_empty() and ("verification_delivery_failed" in lower or "email_not_configured" in lower or "no se pudo enviar el email" in lower or "email no está configurado" in lower):
+        _show_verification()
+        if is_instance_valid(verification): verification.show_message(_friendly_error(error))
+        return
     var friendly := _friendly_error(error)
     message_label.text = friendly
     var message_lines := friendly.count("\n") + 1
@@ -257,17 +276,20 @@ func _show_session_loader() -> void:
     session_loader = CenterContainer.new()
     session_loader.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     session_loader.z_index = 6
+    parchment_panel.add_child(session_loader)
     var column := VBoxContainer.new(); column.alignment = BoxContainer.ALIGNMENT_CENTER; column.add_theme_constant_override("separation", 16); session_loader.add_child(column)
     var label := Label.new(); label.text = "Reconociendo tu sesión..."; label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; label.add_theme_font_size_override("font_size", 24); label.add_theme_color_override("font_color", Color("321c12")); column.add_child(label)
-    var progress := ProgressBar.new(); progress.custom_minimum_size = Vector2(280, 16); progress.show_percentage = false
-    var track := StyleBoxFlat.new(); track.bg_color = Color("d6a66d"); track.set_corner_radius_all(8); progress.add_theme_stylebox_override("background", track)
-    var fill := StyleBoxFlat.new(); fill.bg_color = Color("9a4e26"); fill.set_corner_radius_all(8); progress.add_theme_stylebox_override("fill", fill); column.add_child(progress)
-    parchment_panel.add_child(session_loader)
-    session_loader_tween = create_tween().set_loops(); session_loader_tween.tween_property(progress, "value", 100.0, 1.15).from(0.0)
+    session_loader_frames = [load("res://assets/ui/cursors/loader_hourglass_1.png") as Texture2D, load("res://assets/ui/cursors/loader_hourglass_2.png") as Texture2D, load("res://assets/ui/cursors/loader_hourglass_3.png") as Texture2D]
+    var loader_icon := TextureRect.new(); loader_icon.texture = session_loader_frames[0]; loader_icon.custom_minimum_size = Vector2(48,48); loader_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; loader_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; loader_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; column.add_child(loader_icon)
+    session_loader_timer = Timer.new(); session_loader_timer.wait_time = 0.3; session_loader_timer.timeout.connect(func():
+        if is_instance_valid(loader_icon) and session_loader_frames.size() > 0:
+            var frame := session_loader_frames.find(loader_icon.texture)
+            loader_icon.texture = session_loader_frames[(frame + 1) % session_loader_frames.size()]
+    ); session_loader.add_child(session_loader_timer); session_loader_timer.start()
 
 func _hide_session_loader() -> void:
-    if is_instance_valid(session_loader_tween): session_loader_tween.kill()
-    session_loader_tween = null
+    if is_instance_valid(session_loader_timer): session_loader_timer.stop()
+    session_loader_timer = null
     if is_instance_valid(session_loader): session_loader.queue_free()
     session_loader = null
 

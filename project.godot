@@ -22,6 +22,8 @@ textures/default_filters/use_nearest_mipmap_filter=false
 
 [autoload]
 SessionStore="*res://src/core/session/session_store.gd"
+CursorManager="*res://src/shared/cursor_manager.gd"
+UiSoundManager="*res://src/shared/ui_sound_manager.gd"
 
 [environment]
 defaults/default_clear_color=Color(0.055, 0.075, 0.12, 1)

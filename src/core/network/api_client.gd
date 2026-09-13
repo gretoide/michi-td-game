@@ -2,6 +2,7 @@ class_name ApiClient
 extends Node
 
 signal completed(success: bool, status: int, data: Variant, error: String)
+signal request_started
 
 var _request: HTTPRequest
 var _base_url: String = RuntimeConfig.api_base_url()
@@ -23,6 +24,7 @@ func _send(method: HTTPClient.Method, path: String, payload: Dictionary) -> void
         return
     var headers := PackedStringArray(["Content-Type: application/json", "Accept: application/json"])
     var body := "" if payload.is_empty() else JSON.stringify(payload)
+    request_started.emit()
     var error := _request.request(_base_url + path, headers, method, body)
     if error != OK:
         completed.emit(false, 0, {}, "No se pudo iniciar la solicitud")

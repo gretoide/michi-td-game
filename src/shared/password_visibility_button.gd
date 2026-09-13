@@ -1,25 +1,35 @@
 class_name PasswordVisibilityButton
-extends Control
+extends Button
 
-signal toggled(visible: bool)
 var revealed := false
 
 func _ready() -> void:
+    text = ""
+    focus_mode = Control.FOCUS_ALL
+    mouse_filter = Control.MOUSE_FILTER_STOP
     mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    queue_redraw()
+    toggle_mode = true
+    expand_icon = false
+    alignment = HORIZONTAL_ALIGNMENT_CENTER
+    icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    add_theme_constant_override("icon_max_width", 24)
+    var empty := StyleBoxEmpty.new()
+    add_theme_stylebox_override("normal", empty)
+    add_theme_stylebox_override("hover", empty)
+    add_theme_stylebox_override("pressed", empty)
+    add_theme_stylebox_override("focus", empty)
+    toggled.connect(_on_toggled)
+    set_revealed(false)
 
-func _gui_input(event: InputEvent) -> void:
-    if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-        revealed = not revealed
-        toggled.emit(revealed)
-        queue_redraw()
-        accept_event()
+func _on_toggled(value: bool) -> void:
+    revealed = value
+    _update_icon()
 
-func _draw() -> void:
-    var c := Color("fff3d6")
-    var center := size * 0.5
-    var radius: float = min(size.x, size.y) * 0.22
-    draw_arc(center, radius, 0.0, TAU, 24, c, 2.0)
-    draw_circle(center, radius * 0.35, c)
-    if not revealed:
-        draw_line(Vector2(center.x - radius * 1.35, center.y - radius * 1.35), Vector2(center.x + radius * 1.35, center.y + radius * 1.35), c, 2.5)
+func set_revealed(value: bool) -> void:
+    revealed = value
+    button_pressed = value
+    _update_icon()
+
+func _update_icon() -> void:
+    icon = load("res://assets/ui/cursors/password_eye_visible.png" if revealed else "res://assets/ui/cursors/password_eye_hidden.png") as Texture2D
+    tooltip_text = "Ocultar contraseña" if revealed else "Mostrar contraseña"
