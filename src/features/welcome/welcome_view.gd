@@ -14,7 +14,7 @@ func setup(alias := "jugador") -> void:
     add_child(margin)
     var column := VBoxContainer.new()
     column.add_theme_constant_override("separation", 18)
-    column.add_theme_font_override("font", load("res://assets/fonts/ComicNeueSansID.ttf"))
+    column.add_theme_font_override("font", load("res://assets/fonts/comic_neue_sans_id.ttf"))
     margin.add_child(column)
     var title := Label.new()
     title.text = "Bienvenido, " + alias
@@ -31,9 +31,9 @@ func setup(alias := "jugador") -> void:
     enter.custom_minimum_size = Vector2(300, 54)
     enter.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     enter.tooltip_text = "Ingresar al reino"
-    enter.add_theme_stylebox_override("normal", _button_style("res://assets/ui/rustic-pack/UI-Singles/UI - 44.png"))
-    enter.add_theme_stylebox_override("hover", _button_style("res://assets/ui/rustic-pack/UI-Singles/UI - 45.png"))
-    enter.add_theme_stylebox_override("pressed", _button_style("res://assets/ui/rustic-pack/UI-Singles/UI - 45.png", Color(0.88, 0.88, 0.88, 1.0)))
+    enter.add_theme_stylebox_override("normal", _button_style("res://assets/ui/buttons/button_normal.png"))
+    enter.add_theme_stylebox_override("hover", _button_style("res://assets/ui/buttons/button_hover.png"))
+    enter.add_theme_stylebox_override("pressed", _button_style("res://assets/ui/buttons/button_hover.png", Color(0.88, 0.88, 0.88, 1.0)))
     enter.add_theme_color_override("font_color", Color("fff3d6"))
     enter.add_theme_color_override("font_hover_color", Color("ffd56a"))
     enter.add_theme_color_override("font_outline_color", Color("3a2116"))

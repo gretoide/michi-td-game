@@ -29,8 +29,8 @@ func setup(email: String) -> void:
     message = Label.new(); message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; message.add_theme_font_size_override("font_size", 16); message.add_theme_color_override("font_outline_color", Color("3b2619")); message.add_theme_constant_override("outline_size", 1); message_box.add_child(message); column.add_child(message_box)
 
 func _style_button(button: Button, primary: bool) -> void:
-    var normal := "res://assets/ui/rustic-pack/UI-Singles/UI - 44.png"
-    var hover := "res://assets/ui/rustic-pack/UI-Singles/UI - 45.png"
+    var normal := "res://assets/ui/buttons/button_normal.png"
+    var hover := "res://assets/ui/buttons/button_hover.png"
     button.add_theme_stylebox_override("normal", _wood_style(normal))
     button.add_theme_stylebox_override("hover", _wood_style(hover))
     button.add_theme_stylebox_override("pressed", _wood_style(hover,Color(0.88,0.88,0.88,1.0)))

@@ -4,7 +4,7 @@ Cliente de escritorio Godot 4.7.2 para Michi TD. Esta primera base permite regis
 
 El juego usa una base de 1920×1080, arranca en una ventana de 1280×720 y escala el contenido para conservar la composición en resoluciones distintas. El acceso usa un panel translúcido con desenfoque de fondo y permite mostrar u ocultar la contraseña.
 
-El carrusel alterna sus ilustraciones cada 8 segundos con un crossfade suave. Los fondos y packs visuales están disponibles en `assets/backgrounds` y `assets/ui` para reutilizarlos en las próximas pantallas y controles.
+El carrusel alterna sus ilustraciones cada 8 segundos con un crossfade suave. Los recursos runtime están organizados en `assets/art`, `assets/audio`, `assets/fonts` y `assets/ui`; la información de licencia está en `assets/licenses`.
 
 ## Desarrollo
 

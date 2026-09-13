@@ -59,11 +59,11 @@ func _start_home_music() -> void:
 func _build_ui() -> void:
     var background := ColorRect.new(); background.color = Color("0e1524"); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(background)
     backgrounds = [
-        load("res://assets/backgrounds/kingdom.png") as Texture2D,
-        load("res://assets/backgrounds/battlefield.png") as Texture2D,
-        load("res://assets/backgrounds/forge.png") as Texture2D,
-        load("res://assets/backgrounds/war_room.png") as Texture2D,
-        load("res://assets/backgrounds/tavern_feast.png") as Texture2D,
+        load("res://assets/art/backgrounds/kingdom.png") as Texture2D,
+        load("res://assets/art/backgrounds/battlefield.png") as Texture2D,
+        load("res://assets/art/backgrounds/forge.png") as Texture2D,
+        load("res://assets/art/backgrounds/war_room.png") as Texture2D,
+        load("res://assets/art/backgrounds/tavern_feast.png") as Texture2D,
     ]
     background_texture = _create_background_layer(background)
     background_next_texture = _create_background_layer(background)
@@ -73,11 +73,11 @@ func _build_ui() -> void:
     background_timer = Timer.new(); background_timer.wait_time = 8.0; background_timer.autostart = true; background_timer.timeout.connect(_rotate_background); add_child(background_timer)
     var center := CenterContainer.new(); center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(center)
     panel_stack = VBoxContainer.new(); panel_stack.alignment = BoxContainer.ALIGNMENT_CENTER; panel_stack.add_theme_constant_override("separation", 18); center.add_child(panel_stack)
-    glass_panel = Panel.new(); glass_panel.custom_minimum_size = Vector2(640,400); glass_panel.add_theme_stylebox_override("panel", _texture_style("res://assets/ui/Fantasy Wooden GUI  Free/PNG/UI board Large  stone.png",42)); panel_stack.add_child(glass_panel)
-    parchment_panel = Panel.new(); parchment_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); parchment_panel.offset_left = 18; parchment_panel.offset_top = 18; parchment_panel.offset_right = -18; parchment_panel.offset_bottom = -18; parchment_panel.add_theme_stylebox_override("panel",_texture_style("res://assets/ui/Fantasy Wooden GUI  Free/PNG/UI board Large  parchment.png",38,Color(1.18,1.10,0.96,1.0))); glass_panel.add_child(parchment_panel)
+    glass_panel = Panel.new(); glass_panel.custom_minimum_size = Vector2(640,400); glass_panel.add_theme_stylebox_override("panel", _texture_style("res://assets/ui/panels/large_stone.png",42)); panel_stack.add_child(glass_panel)
+    parchment_panel = Panel.new(); parchment_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); parchment_panel.offset_left = 18; parchment_panel.offset_top = 18; parchment_panel.offset_right = -18; parchment_panel.offset_bottom = -18; parchment_panel.add_theme_stylebox_override("panel",_texture_style("res://assets/ui/panels/large_parchment.png",38,Color(1.18,1.10,0.96,1.0))); glass_panel.add_child(parchment_panel)
     parchment_brightener = ColorRect.new(); parchment_brightener.color = Color(1.0,0.95,0.82,0.62); parchment_brightener.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); parchment_brightener.offset_left = 34; parchment_brightener.offset_top = 34; parchment_brightener.offset_right = -34; parchment_brightener.offset_bottom = -34; parchment_brightener.mouse_filter = Control.MOUSE_FILTER_IGNORE; parchment_brightener.visible = false; parchment_panel.add_child(parchment_brightener)
     var margin := MarginContainer.new(); margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); margin.add_theme_constant_override("margin_left",64); margin.add_theme_constant_override("margin_right",64); margin.add_theme_constant_override("margin_top",90); margin.add_theme_constant_override("margin_bottom",42); parchment_panel.add_child(margin)
-    root_ui = VBoxContainer.new(); root_ui.add_theme_constant_override("separation",12); var theme := Theme.new(); theme.default_font = load("res://assets/fonts/ComicNeueSansID.ttf"); theme.default_font_size = 20; theme.set_color("font_color","Label",Color("321c12")); theme.set_color("font_color","Button",Color("321c12")); parchment_panel.theme = theme; root_ui.theme = theme; margin.add_child(root_ui)
+    root_ui = VBoxContainer.new(); root_ui.add_theme_constant_override("separation",12); var theme := Theme.new(); theme.default_font = load("res://assets/fonts/comic_neue_sans_id.ttf"); theme.default_font_size = 20; theme.set_color("font_color","Label",Color("321c12")); theme.set_color("font_color","Button",Color("321c12")); parchment_panel.theme = theme; root_ui.theme = theme; margin.add_child(root_ui)
     _create_title_sign()
     welcome_menu = VBoxContainer.new(); welcome_menu.add_theme_constant_override("separation",14)
     var welcome_label := Label.new(); welcome_label.text = "Bienvenido al reino"; welcome_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; welcome_label.add_theme_font_size_override("font_size",30); welcome_menu.add_child(welcome_label)
@@ -95,21 +95,21 @@ func _build_ui() -> void:
     mode_button = Button.new(); mode_button.flat = true; mode_button.custom_minimum_size = Vector2(0,38); mode_button.pressed.connect(_toggle_mode); mode_button.mouse_entered.connect(func(): _set_mode_button_text(true)); mode_button.mouse_exited.connect(func(): _set_mode_button_text(false)); mode_button.visible = false; _style_link_button(mode_button); root_ui.add_child(mode_button)
     mode_button_label = RichTextLabel.new(); mode_button_label.bbcode_enabled = true; mode_button_label.fit_content = true; mode_button_label.scroll_active = false; mode_button_label.mouse_filter = Control.MOUSE_FILTER_IGNORE; mode_button_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); mode_button_label.offset_top = 3; mode_button_label.offset_bottom = -3; mode_button_label.add_theme_font_size_override("normal_font_size",20); mode_button.add_child(mode_button_label)
     message_panel = PanelContainer.new(); message_panel.visible = false; message_panel.custom_minimum_size = Vector2(520,108); message_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-    message_panel.add_theme_stylebox_override("panel",_texture_style("res://assets/ui/Fantasy Wooden GUI  Free/PNG/UI board Small  stone.png",28))
+    message_panel.add_theme_stylebox_override("panel",_texture_style("res://assets/ui/panels/small_stone.png",28))
     var alert_margin := MarginContainer.new(); alert_margin.add_theme_constant_override("margin_left",42); alert_margin.add_theme_constant_override("margin_right",42); alert_margin.add_theme_constant_override("margin_top",20); alert_margin.add_theme_constant_override("margin_bottom",20); message_panel.add_child(alert_margin)
     var alert_row := HBoxContainer.new(); alert_row.alignment = BoxContainer.ALIGNMENT_CENTER; alert_row.add_theme_constant_override("separation",14); alert_margin.add_child(alert_row)
-    var alert_icon := TextureRect.new(); alert_icon.texture = load("res://assets/ui/Fantasy Wooden GUI  Free/PNG/Exclamation_Red.png"); alert_icon.custom_minimum_size = Vector2(44,44); alert_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; alert_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; alert_row.add_child(alert_icon)
+    var alert_icon := TextureRect.new(); alert_icon.texture = load("res://assets/ui/icons/alert_error.png"); alert_icon.custom_minimum_size = Vector2(44,44); alert_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; alert_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; alert_row.add_child(alert_icon)
     message_label = Label.new(); message_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; message_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; message_label.add_theme_color_override("font_color",Color("fff1d0")); message_label.add_theme_font_size_override("font_size",17); alert_row.add_child(message_label); panel_stack.add_child(message_panel)
-    back_button = Button.new(); back_button.text = "Volver"; back_button.icon = load("res://assets/ui/medieval-pack-2/UI Icons/icon6.png"); back_button.expand_icon = true; back_button.custom_minimum_size = Vector2(150,44); back_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; _style_action_button(back_button,false); back_button.visible = false; back_button.pressed.connect(_show_landing); panel_stack.add_child(back_button)
+    back_button = Button.new(); back_button.text = "Volver"; back_button.icon = load("res://assets/ui/icons/back.png"); back_button.expand_icon = true; back_button.custom_minimum_size = Vector2(150,44); back_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; _style_action_button(back_button,false); back_button.visible = false; back_button.pressed.connect(_show_landing); panel_stack.add_child(back_button)
     _create_music_toggle()
 
 func _create_title_sign() -> void:
-    var sign := PanelContainer.new(); sign.z_index = 10; sign.mouse_filter = Control.MOUSE_FILTER_IGNORE; sign.anchor_left = 0.5; sign.anchor_right = 0.5; sign.offset_left = -190; sign.offset_right = 190; sign.offset_top = -52; sign.offset_bottom = 72; sign.add_theme_stylebox_override("panel",_wood_style("res://assets/ui/rustic-pack/UI-Singles/UI - 33.png")); glass_panel.add_child(sign)
+    var sign := PanelContainer.new(); sign.z_index = 10; sign.mouse_filter = Control.MOUSE_FILTER_IGNORE; sign.anchor_left = 0.5; sign.anchor_right = 0.5; sign.offset_left = -190; sign.offset_right = 190; sign.offset_top = -52; sign.offset_bottom = 72; sign.add_theme_stylebox_override("panel",_wood_style("res://assets/ui/decorations/title_sign.png")); glass_panel.add_child(sign)
     var row := HBoxContainer.new(); row.alignment = BoxContainer.ALIGNMENT_CENTER; row.add_theme_constant_override("separation",18); sign.add_child(row); row.add_child(_create_sign_stud())
-    var title := Label.new(); title.text = "Michi"; title.custom_minimum_size = Vector2(250,0); title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",72); title.add_theme_font_override("font",load("res://assets/fonts/Kelmscott.ttf")); title.add_theme_color_override("font_color",Color("fff3d6")); row.add_child(title); row.add_child(_create_sign_stud())
+    var title := Label.new(); title.text = "Michi"; title.custom_minimum_size = Vector2(250,0); title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",72); title.add_theme_font_override("font",load("res://assets/fonts/kelmscott.ttf")); title.add_theme_color_override("font_color",Color("fff3d6")); row.add_child(title); row.add_child(_create_sign_stud())
 
 func _create_sign_stud() -> TextureRect:
-    var stud := TextureRect.new(); stud.texture = load("res://assets/ui/rustic-pack/UI-Singles/UI - 16.png"); stud.custom_minimum_size = Vector2(26,26); stud.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; stud.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; stud.mouse_filter = Control.MOUSE_FILTER_IGNORE; return stud
+    var stud := TextureRect.new(); stud.texture = load("res://assets/ui/icons/decorative_stud.png"); stud.custom_minimum_size = Vector2(26,26); stud.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; stud.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; stud.mouse_filter = Control.MOUSE_FILTER_IGNORE; return stud
 
 func _wood_style(path: String) -> StyleBoxTexture:
     var style := StyleBoxTexture.new(); style.texture = load(path); style.texture_margin_left = 8; style.texture_margin_right = 8; style.texture_margin_top = 8; style.texture_margin_bottom = 8; style.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE; style.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE; return style
@@ -123,8 +123,8 @@ func _texture_style(path: String, margin: float, tint := Color.WHITE) -> StyleBo
     return style
 
 func _style_action_button(button: Button, primary: bool) -> void:
-    var normal := "res://assets/ui/rustic-pack/UI-Singles/UI - 44.png"
-    var hover := "res://assets/ui/rustic-pack/UI-Singles/UI - 45.png"
+    var normal := "res://assets/ui/buttons/button_normal.png"
+    var hover := "res://assets/ui/buttons/button_hover.png"
     button.add_theme_stylebox_override("normal",_texture_style(normal,7))
     button.add_theme_stylebox_override("hover",_texture_style(hover,7))
     button.add_theme_stylebox_override("pressed",_texture_style(hover,7,Color(0.88,0.88,0.88,1.0)))
@@ -150,7 +150,7 @@ func _toggle_home_music() -> void:
     _update_music_toggle()
 func _update_music_toggle() -> void:
     if not is_instance_valid(music_toggle_button): return
-    var playing := is_instance_valid(home_music) and not home_music.stream_paused; music_toggle_button.icon = load("res://assets/ui/rustic-pack/UI-Singles/UI - 73.png" if playing else "res://assets/ui/rustic-pack/UI-Singles/UI - 72.png"); music_toggle_button.tooltip_text = "Pausar música" if playing else "Reproducir música"
+    var playing := is_instance_valid(home_music) and not home_music.stream_paused; music_toggle_button.icon = load("res://assets/ui/icons/music_enabled.png" if playing else "res://assets/ui/icons/music_disabled.png"); music_toggle_button.tooltip_text = "Pausar música" if playing else "Reproducir música"
 
 func _toggle_password_visibility(visible: bool) -> void: password_input.secret = not visible
 func _toggle_mode() -> void: _open_auth(not register_mode)
