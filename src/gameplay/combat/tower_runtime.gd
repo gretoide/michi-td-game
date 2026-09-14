@@ -10,6 +10,7 @@ var stats := TowerCombatStats.new()
 var targeting := TargetController.new()
 var cooldown := 0.0
 var stopped := false
+var disarmed := false
 
 func setup(value_gem: GemInstance, definition: GemDefinition, world_position := Vector2.ZERO) -> void:
 	gem = value_gem; id = gem.id; position = world_position; stats = TowerCombatStats.from_gem(gem, definition)
@@ -24,6 +25,6 @@ func attack(target: EnemyRuntime) -> bool:
 func tick(delta: float, enemies: Array[EnemyRuntime], projectile_speed := 1000.0) -> HomingProjectile:
 	if cooldown > 0.0: cooldown = maxf(cooldown - delta, 0.0)
 	var target := targeting.tick(position, stats.range_units, enemies)
-	if target == null or cooldown > 0.0 or targeting.mode == TargetController.Mode.STOPPED: return null
+	if disarmed or target == null or cooldown > 0.0 or targeting.mode == TargetController.Mode.STOPPED: return null
 	var payload := DamagePipeline.DamageContext.new(); payload.base_damage = stats.damage; payload.damage_type = DamagePipeline.DamageType.PHYSICAL
 	var projectile := HomingProjectile.new(); projectile.setup(position, target, payload, projectile_speed); cooldown = stats.attack_interval(); attack_started.emit(target, projectile); return projectile

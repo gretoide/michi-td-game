@@ -31,8 +31,14 @@ func spawn_enemy(profile: EnemyProfileDefinition, cell := Vector2i.ZERO) -> Enem
 	enemies.append(enemy); enemy_spawned.emit(enemy); combat_changed.emit(); return enemy
 
 func tick(delta: float) -> void:
-	for enemy in enemies: enemy.move_along_path(delta)
+	for enemy in enemies:
+		enemy.tick_abilities(delta)
+		enemy.move_along_path(delta)
 	for tower in towers:
+		tower.disarmed = false
+		for enemy in enemies:
+			if enemy.is_alive() and enemy.disarm_aura_radius > 0.0 and tower.position.distance_to(enemy.position) <= enemy.disarm_aura_radius:
+				tower.disarmed = true; break
 		var projectile := tower.tick(delta, enemies, projectile_speed)
 		if projectile != null: projectiles.append(projectile); projectile_created.emit(projectile)
 	for projectile in projectiles.duplicate():

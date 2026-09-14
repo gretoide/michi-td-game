@@ -5,11 +5,14 @@ signal damaged(amount: float, result)
 signal died
 signal escaped
 signal reached_path_end
+signal checkpoint_reached(index: int)
 var id: int
 var profile_id: StringName
 var position := Vector2.ZERO
 var max_hp := 1.0
 var hp := 1.0
+var attack := 1
+var xp_reward := 0
 var armor := 0.0
 var magic_resistance := 0.0
 var abilities: Dictionary = {}
@@ -20,14 +23,24 @@ var damage_accumulator := 0.0
 var movement_speed := 250.0
 var path: Array[Vector2] = []
 var path_index := 0
+var checkpoint_cells: Array[Vector2i] = []
+var rush_remaining := 0.0
+var recharge_accumulator := 0.0
+var evasion_chance := 0.0
+var invisible := false
+var disarm_aura_radius := 0.0
 
 func setup(value_id: int, profile: EnemyProfileDefinition, start_position := Vector2.ZERO) -> void:
 	id = value_id; profile_id = profile.id; position = start_position
-	max_hp = maxf(profile.hp, 1.0); hp = max_hp; armor = profile.armor; magic_resistance = profile.magic_resistance
+	max_hp = maxf(profile.hp, 1.0); hp = max_hp; armor = profile.armor; magic_resistance = profile.magic_resistance; attack = profile.attack; xp_reward = profile.xp_reward
 	movement_speed = maxf(profile.base_speed, 20.0)
 	for ability in profile.ability_ids: abilities[StringName(ability)] = true
 	is_magic_immune = abilities.has(&"magic_immunity")
 	is_physical_immune = abilities.has(&"physical_immune")
+	if abilities.has(&"high_armor"): armor += 20.0
+	invisible = abilities.has(&"invisible")
+	if abilities.has(&"evasion"): evasion_chance = 0.5
+	if abilities.has(&"disarm_aura"): disarm_aura_radius = 300.0
 
 func is_alive() -> bool:
 	return alive and hp > 0.0
@@ -39,6 +52,21 @@ func apply_damage(result) -> float:
 	if hp <= 0.0:
 		alive = false; died.emit()
 	return applied
+
+func tick_abilities(delta: float) -> void:
+	if not is_alive(): return
+	if rush_remaining > 0.0: rush_remaining = maxf(0.0, rush_remaining - delta)
+	if abilities.has(&"recharge"):
+		recharge_accumulator += delta
+		while recharge_accumulator >= 1.0:
+			recharge_accumulator -= 1.0; hp = minf(max_hp, hp + max_hp * 0.01)
+
+func trigger_rush() -> void:
+	if abilities.has(&"rush"): rush_remaining = 3.0
+
+func effective_move_speed() -> float:
+	var multiplier := 1.5 if rush_remaining > 0.0 else 1.0
+	return maxf(20.0, movement_speed * multiplier)
 
 func mark_escaped() -> void:
 	if not is_alive(): return
@@ -52,7 +80,14 @@ func set_path(cells: Array[Vector2i]) -> void:
 
 func move_along_path(delta: float) -> void:
 	if not is_alive() or path_index >= path.size() - 1: return
-	position = position.move_toward(path[path_index + 1], movement_speed * delta)
+	position = position.move_toward(path[path_index + 1], effective_move_speed() * delta)
 	if position.is_equal_approx(path[path_index + 1]):
 		path_index += 1
-		if path_index >= path.size() - 1: reached_path_end.emit()
+		if path_index < path.size() - 1:
+			var reached_cell := Vector2i(floori(path[path_index].x / 100.0), floori(path[path_index].y / 100.0))
+			var checkpoint_index := checkpoint_cells.find(reached_cell)
+			if checkpoint_index >= 0: checkpoint_reached.emit(checkpoint_index)
+		else: reached_path_end.emit()
+
+func set_checkpoint_cells(value: Array[Vector2i]) -> void:
+	checkpoint_cells = value.duplicate()

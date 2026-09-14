@@ -34,3 +34,28 @@ godot --headless --path . --script res://test/foundation/run.gd
 # Localización
 
 La localización es un servicio de core independiente de gameplay y autenticación. El shell inicial y los módulos futuros consumen claves estables mediante `LocalizationService`; nunca usan el texto traducido como identificador. La preferencia local vive en `user://preferences.cfg` y la API persiste `User.locale` (`en`/`es`) al registrar la cuenta. Si falta una clave en el idioma activo, se utiliza la traducción inglesa.
+
+## M4: enemigos, waves y progresión
+
+`GameRuntime` compone el ciclo `Construction -> Combat -> siguiente wave` con módulos aislados:
+
+```text
+WaveDefinition/WaveRuntime -> EnemyRuntime -> CombatRuntime
+                                      -> ProgressRuntime
+                                      -> EconomyRuntime
+                                      -> PlayerProgressionRuntime
+                                      -> GameOutcomeRuntime
+```
+
+`WaveRuntime` controla conteo y resolución; oro, experiencia, progreso y vida viven en runtimes independientes y se alimentan de eventos de muerte/escape. Victoria o derrota congelan el tick. M4 usa un catálogo bootstrap generado en memoria (50 waves, cadencia de 1 segundo y bosses en 10/20/30/40/50); el dataset completo sigue reservado para M5. `SupportSkillCatalog` expone adquisición y mejora sin overlay visual, que queda para M6.
+
+Las abilities se resuelven por capacidades del perfil, no por nombres de waves: `EnemyRuntime`
+expone inmunidades, armadura alta, invisibilidad, evasión y aura de desarme, mientras que
+Rush/Recharge/ Cleanse actualizan estado temporal, regeneración y umbrales de daño. La
+pipeline conserva `damage_type` y `effect_school` separados para que Magic Immunity no
+bloquee efectos `NonMagical`. Evasion recibe `RandomSource` por contexto y es reproducible.
+
+`SupportRewardRuntime` genera tres candidatos únicos y reproducibles después de las waves
+5, 10, ..., 45. La selección es única y gratuita; al alcanzar cuatro skills distintas sólo
+se ofrecen upgrades inferiores a nivel 4. La wave 50 no genera reward y el avance queda
+bloqueado hasta resolver el candidato pendiente. El overlay visual continúa en M6.

@@ -5,6 +5,7 @@ var runtime: GameRuntime
 var phase_label: Label
 var wave_label: Label
 var combat_label: Label
+var resources_label: Label
 
 func setup(value: GameRuntime) -> void:
 	runtime = value
@@ -17,6 +18,7 @@ func setup(value: GameRuntime) -> void:
 	phase_label = Label.new(); phase_label.text = LocalizationService.tr_key("game.phase.construction"); phase_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hud_row.add_child(phase_label)
 	wave_label = Label.new(); wave_label.text = LocalizationService.tr_key("game.wave", {"number": 1}); hud_row.add_child(wave_label)
 	combat_label = Label.new(); hud_row.add_child(combat_label)
+	resources_label = Label.new(); hud_row.add_child(resources_label)
 	var locale := LocaleSelector.new(); locale.custom_minimum_size = Vector2(100,38); locale.setup()
 	hud_row.add_child(locale)
 	var pause := Button.new(); pause.custom_minimum_size = Vector2(42,38); pause.text = "Ⅱ"; pause.tooltip_text = LocalizationService.tr_key("game.pause"); pause.pressed.connect(func(): get_tree().paused = not get_tree().paused); pause.process_mode = Node.PROCESS_MODE_ALWAYS; hud_row.add_child(pause)
@@ -27,12 +29,16 @@ func setup(value: GameRuntime) -> void:
 	runtime.combat.combat_changed.connect(func(): map_view.queue_redraw())
 	runtime.combat.combat_changed.connect(func(): _refresh_combat_label())
 	runtime.phases.phase_entered.connect(_on_phase)
-	LocalizationService.locale_changed.connect(func(_locale: String): _on_phase(runtime.phases.phase); _refresh_combat_label())
+	runtime.outcome.victorious.connect(func(): _on_phase(runtime.phases.phase))
+	runtime.outcome.defeated.connect(func(): _on_phase(runtime.phases.phase))
+	LocalizationService.locale_changed.connect(func(_locale: String): _on_phase(runtime.phases.phase); _refresh_combat_label(); _refresh_resources_label())
 	_refresh_combat_label()
+	_refresh_resources_label()
 
 func _process(delta: float) -> void:
 	if runtime != null:
 		runtime.tick(delta)
+		_refresh_resources_label()
 		queue_redraw()
 
 func _hud_panel() -> StyleBoxTexture:
@@ -48,12 +54,19 @@ func _add_gameplay_sprite(parent: Control, path: String, size: Vector2, region_s
 	var sprite := TextureRect.new(); sprite.texture = atlas; sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; sprite.size = size; sprite.position = position; sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE; parent.add_child(sprite)
 
 func _on_phase(value: GamePhaseMachine.Phase) -> void:
-	phase_label.text = LocalizationService.tr_key("game.phase.construction" if value == GamePhaseMachine.Phase.CONSTRUCTION else "game.phase.combat")
+	var phase_key := "game.phase.construction" if value == GamePhaseMachine.Phase.CONSTRUCTION else "game.phase.combat"
+	if runtime.outcome_state == "victory": phase_key = "game.phase.victory"
+	elif runtime.outcome_state == "defeat": phase_key = "game.phase.defeat"
+	phase_label.text = LocalizationService.tr_key(phase_key)
 	wave_label.text = LocalizationService.tr_key("game.wave", {"number": runtime.phases.wave_number})
 
 func _refresh_combat_label() -> void:
 	if combat_label == null or runtime == null or runtime.combat == null: return
 	combat_label.text = LocalizationService.tr_key("game.combat.summary", {"towers": runtime.combat.towers.size(), "enemies": runtime.combat.enemies.size(), "projectiles": runtime.combat.projectiles.size()})
+
+func _refresh_resources_label() -> void:
+	if resources_label == null or runtime == null: return
+	resources_label.text = LocalizationService.tr_key("game.resources", {"life": runtime.player_state.lives, "gold": runtime.player_state.gold, "xp": runtime.player_state.xp, "progress": runtime.player_state.progress})
 
 class MapDebugView extends Control:
 	var runtime: GameRuntime
@@ -63,10 +76,14 @@ class MapDebugView extends Control:
 
 	func _gui_input(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and runtime != null:
+			if runtime.phases.phase != GamePhaseMachine.Phase.CONSTRUCTION:
+				return
 			var scale_value := minf(get_rect().size.x, get_rect().size.y) / 36.0
 			var cell := Vector2i(floori(event.position.x / scale_value), floori(event.position.y / scale_value))
 			if runtime.construction.gem_at_cell(cell) != null:
 				runtime.construction.select_board_gem(cell)
+			elif runtime.construction.stones.has(cell):
+				runtime.construction.select_stone(cell)
 			else:
 				runtime.construction.place_gem(cell, int(runtime.player_state.player_level))
 			queue_redraw()

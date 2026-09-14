@@ -36,7 +36,7 @@ func tick(tower_position: Vector2, range_units: float, enemies: Array[EnemyRunti
 	return acquire(tower_position, range_units, enemies)
 
 func _valid(candidate: EnemyRuntime, origin: Vector2, radius: float) -> bool:
-	return candidate != null and candidate.is_alive() and origin.distance_to(candidate.position) <= radius
+	return candidate != null and candidate.is_alive() and not candidate.invisible and origin.distance_to(candidate.position) <= radius
 
 func _set_target(value: EnemyRuntime) -> void:
 	if target == value: return

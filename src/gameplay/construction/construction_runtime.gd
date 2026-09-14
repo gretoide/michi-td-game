@@ -8,6 +8,7 @@ signal stone_created(stone: StoneInstance)
 signal construction_finalized(result: GemInstance)
 signal combination_completed(recipe_id: StringName, result: GemInstance)
 signal selection_changed(gem: GemInstance)
+signal stone_selected(cell: Vector2i)
 signal gem_pool_changed
 
 const MAX_PLACEMENTS := 5
@@ -26,6 +27,7 @@ var board_gems: Array[GemInstance] = []
 var stones: Dictionary = {}
 var selected_result: GemInstance
 var selected_board_gem: GemInstance
+var selected_stone_cell := Vector2i(-1, -1)
 var round_id := 1
 
 func setup(value_grid: GridModel, value_pathfinder: GroundPathfinder, value_phases: GamePhaseMachine, value_generator: GemGenerator, value_recipes: Array = [], value_map: MapLayout = null) -> void:
@@ -35,7 +37,7 @@ func setup(value_grid: GridModel, value_pathfinder: GroundPathfinder, value_phas
 
 func begin_round(value := 1) -> void:
 	round_id = value
-	current_gems.clear(); available_gems.clear(); selected_gem = null; selected_board_gem = null; selected_result = null
+	current_gems.clear(); available_gems.clear(); selected_gem = null; selected_board_gem = null; selected_result = null; selected_stone_cell = Vector2i(-1, -1)
 	if generator != null: generator.reset_round(round_id)
 	construction_changed.emit(0, MAX_PLACEMENTS)
 	gem_pool_changed.emit()
@@ -82,6 +84,10 @@ func select_board_gem(cell: Vector2i) -> GemInstance:
 	selected_board_gem = gem
 	selection_changed.emit(gem)
 	return gem
+
+func select_stone(cell: Vector2i) -> bool:
+	if phases == null or phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or not stones.has(cell): return false
+	selected_stone_cell = cell; stone_selected.emit(cell); return true
 
 func can_place() -> bool:
 	return phases != null and phases.phase == GamePhaseMachine.Phase.CONSTRUCTION and placed_count() < MAX_PLACEMENTS
@@ -139,10 +145,11 @@ func remove_stone(cell: Vector2i) -> bool:
 	if phases == null or not phases.is_action_allowed(&"remove_stone") or not stones.has(cell):
 		return false
 	stones.erase(cell)
+	selected_stone_cell = Vector2i(-1, -1)
 	return grid.release(cell)
 
 func degrade(gem: GemInstance) -> GemInstance:
-	if gem == null or gem not in current_gems or placed_count() != MAX_PLACEMENTS:
+	if phases == null or not phases.is_action_allowed(&"degrade") or gem == null or gem not in current_gems or placed_count() != MAX_PLACEMENTS:
 		return null
 	if gem.quality <= GemInstance.Quality.CHIPPED:
 		return null

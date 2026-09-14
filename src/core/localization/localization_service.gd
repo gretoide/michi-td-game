@@ -31,9 +31,9 @@ const EXTRA_CATALOG := {
         "error.unexpected": "An unexpected error occurred. Try again.",
         "error.game_start": "The game could not start: {detail}"
         ,"password.show": "Show password", "password.hide": "Hide password",
-        "game.phase.construction": "Construction", "game.phase.combat": "Combat",
+        "game.phase.construction": "Construction", "game.phase.combat": "Combat", "game.phase.victory": "Victory", "game.phase.defeat": "Defeat",
         "game.wave": "Wave {number}", "game.pause": "Pause",
-        "game.harness.title": "Construction harness", "game.harness.select": "Select Gem", "game.harness.select_gem": "Select gem", "game.harness.place": "Place Gem", "game.harness.keep": "Keep first", "game.harness.combine": "Combine basic", "game.harness.degrade": "Degrade", "game.harness.remove": "Remove Stone", "game.harness.status": "Gems {gems}/5 | Stones {stones} | Phase {phase}", "game.harness.rejected": "Rejected: {code}", "game.harness.finalized": "Construction finalized", "game.combat.summary": "Towers {towers} | Enemies {enemies} | Projectiles {projectiles}"
+        "game.harness.title": "Construction harness", "game.harness.select": "Select Gem", "game.harness.select_gem": "Select gem", "game.harness.place": "Place Gem", "game.harness.keep": "Keep first", "game.harness.combine": "Combine basic", "game.harness.degrade": "Degrade", "game.harness.degrade_hint": "Select a non-Chipped gem", "game.harness.remove": "Remove Stone", "game.harness.status": "Gems {gems}/5 | Stones {stones} | Phase {phase}", "game.harness.rejected": "Rejected: {code}", "game.harness.finalized": "Construction finalized", "game.combat.summary": "Towers {towers} | Enemies {enemies} | Projectiles {projectiles}", "game.resources": "Life {life} | Gold {gold} | XP {xp} | Progress {progress}"
     },
     "es": {
         "verification.hint": "Enviamos un código a {email}\nTiene una validez de 15 minutos.",
@@ -55,9 +55,9 @@ const EXTRA_CATALOG := {
         "error.unexpected": "Ocurrió un error inesperado. Intentá nuevamente.",
         "error.game_start": "No se pudo iniciar la partida: {detail}"
         ,"password.show": "Mostrar contraseña", "password.hide": "Ocultar contraseña",
-        "game.phase.construction": "Construcción", "game.phase.combat": "Combate",
+        "game.phase.construction": "Construcción", "game.phase.combat": "Combate", "game.phase.victory": "Victoria", "game.phase.defeat": "Derrota",
         "game.wave": "Oleada {number}", "game.pause": "Pausa",
-        "game.harness.title": "Panel de construcción", "game.harness.select": "Seleccionar gema", "game.harness.select_gem": "Seleccioná una gema", "game.harness.place": "Colocar gema", "game.harness.keep": "Conservar primera", "game.harness.combine": "Combinar básica", "game.harness.degrade": "Degradar", "game.harness.remove": "Eliminar piedra", "game.harness.status": "Gemas {gems}/5 | Piedras {stones} | Fase {phase}", "game.harness.rejected": "Rechazado: {code}", "game.harness.finalized": "Construcción finalizada", "game.combat.summary": "Torres {towers} | Enemigos {enemies} | Proyectiles {projectiles}"
+        "game.harness.title": "Panel de construcción", "game.harness.select": "Seleccionar gema", "game.harness.select_gem": "Seleccioná una gema", "game.harness.place": "Colocar gema", "game.harness.keep": "Conservar primera", "game.harness.combine": "Combinar básica", "game.harness.degrade": "Degradar", "game.harness.degrade_hint": "Seleccioná una gema no Chipped", "game.harness.remove": "Eliminar piedra", "game.harness.status": "Gemas {gems}/5 | Piedras {stones} | Fase {phase}", "game.harness.rejected": "Rechazado: {code}", "game.harness.finalized": "Construcción finalizada", "game.combat.summary": "Torres {towers} | Enemigos {enemies} | Proyectiles {projectiles}", "game.resources": "Vida {life} | Oro {gold} | XP {xp} | Progreso {progress}"
     }
 }
 

@@ -8,6 +8,7 @@ class DamageContext:
 	var multiplier := 1.0
 	var critical_multiplier := 1.0
 	var pierce := 0.0
+	var random_source: RandomSource
 
 class DamageResult:
 	var final_damage := 0.0
@@ -17,6 +18,8 @@ class DamageResult:
 static func resolve(context: DamageContext, target: EnemyRuntime) -> DamageResult:
 	var result := DamageResult.new(); result.damage_type = context.damage_type
 	var value := maxf(context.base_damage, 0.0) * maxf(context.multiplier, 0.0) * maxf(context.critical_multiplier, 0.0)
+	if target.evasion_chance > 0.0 and context.random_source != null and context.random_source.next_float() < target.evasion_chance:
+		result.final_damage = 0.0; result.mitigated_damage = 0.0; return result
 	if context.damage_type == DamageType.PHYSICAL:
 		if target.is_physical_immune: value = 0.0
 		else:
