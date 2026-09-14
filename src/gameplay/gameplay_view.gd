@@ -382,7 +382,8 @@ func _show_reward(wave_number: int, candidates: Array) -> void:
     for i in candidates.size():
         var id: StringName = candidates[i]
         var picked_id := id
-        var button := Button.new(); button.text = "%d. %s" % [i + 1, picked_id]; button.custom_minimum_size = Vector2(320, 42); button.pressed.connect(func(): runtime.support_rewards.choose(picked_id); _close_overlay(reward_overlay); reward_overlay = null; get_tree().paused = false); column.add_child(button)
+        var reward_name: String = LocalizationService.tr_key("game.reward.skill.%s" % str(picked_id))
+        var button := Button.new(); button.text = "%d. %s" % [i + 1, reward_name]; button.custom_minimum_size = Vector2(320, 42); button.pressed.connect(func(): runtime.support_rewards.choose(picked_id); _close_overlay(reward_overlay); reward_overlay = null; get_tree().paused = false); column.add_child(button)
     var close := _close_icon_button(func(): _close_overlay(reward_overlay); reward_overlay = null; get_tree().paused = false); column.add_child(close); column.move_child(close, 0)
     add_child(reward_overlay)
     get_tree().paused = true
@@ -1160,6 +1161,7 @@ class MapDebugView extends Control:
     var gem_layer: Control
     var terrain_layer: MapTerrainLayer
     var decoration_layer: MapDecorationLayer
+    var grid_layer: MapGridLayer
     var stone_layer: Control
     var stone_nodes: Dictionary = {}
     var spawner_layer: Control
@@ -1196,6 +1198,11 @@ class MapDebugView extends Control:
         decoration_layer.z_index = -1
         decoration_layer.show_behind_parent = true
         add_child(decoration_layer)
+        grid_layer = MapGridLayer.new()
+        grid_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        grid_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        grid_layer.z_index = 0
+        add_child(grid_layer)
         gem_layer = Control.new()
         gem_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         gem_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1247,8 +1254,10 @@ class MapDebugView extends Control:
         board_origin = Vector2((size.x - board_size) * 0.5, (size.y - board_size) * 0.5)
         terrain_layer.size = size
         decoration_layer.size = size
+        grid_layer.size = size
         terrain_layer.sync(board_size, map_zoom, map_pan, board_origin)
         decoration_layer.sync(board_size, map_zoom, map_pan, board_origin)
+        grid_layer.sync(board_size, map_zoom, map_pan, board_origin)
         _sync_spawner(scale_value)
         _sync_stone_sprites(scale_value)
         _sync_placement_preview(scale_value)
@@ -1398,10 +1407,6 @@ class MapDebugView extends Control:
         var board_size := minf(size.x, size.y)
         var scale_value := board_size / 36.0
         draw_set_transform(board_origin + map_pan, 0.0, Vector2.ONE * map_zoom)
-        for point in runtime.map.ordered_waypoints():
-            if point != runtime.map.spawn: draw_circle((Vector2(point)+Vector2.ONE*0.5)*scale_value, maxf(3.0, scale_value * 0.18), Color("ffd477"))
-        if not is_instance_valid(spawner_decoration) or spawner_decoration.texture == null:
-            draw_circle((Vector2(runtime.map.spawn)+Vector2.ONE*0.5)*scale_value, maxf(3.0, scale_value * 0.18), Color("ffd477"))
         if hover_cell.x >= 0 and runtime.phases.phase == GamePhaseMachine.Phase.CONSTRUCTION:
             var hover_rect := Rect2(Vector2(hover_cell) * scale_value, Vector2.ONE * scale_value)
             var outline_color := Color("ffd477") if hover_can_place else Color("e66b6b")
@@ -1443,6 +1448,7 @@ class MapTerrainLayer extends Control:
     var tile_nodes: Array[TextureRect] = []
     var field_textures: Dictionary = {}
     var field_edges: Dictionary = {}
+    var base_texture: Texture2D
     var route_cells: Dictionary = {}
     var initialized := false
     var last_board_size := -1.0
@@ -1478,20 +1484,21 @@ class MapTerrainLayer extends Control:
         queue_redraw()
 
     func _draw() -> void:
-        draw_rect(Rect2(Vector2.ZERO, size), Color("829544"))
         if visual_board_size <= 0.0: return
         var cell_size := visual_board_size / float(GRID_SIZE) * visual_zoom
         if cell_size <= 0.0: return
         var origin := visual_origin + visual_pan
-        var line_color := Color(1.0, 1.0, 1.0, 0.10)
-        var start_x := fmod(origin.x, cell_size)
-        var start_y := fmod(origin.y, cell_size)
-        for x in range(-1, int(ceil(size.x / cell_size)) + 2):
-            var x_pos := start_x + float(x) * cell_size
-            draw_line(Vector2(x_pos, 0.0), Vector2(x_pos, size.y), line_color, 1.0)
-        for y in range(-1, int(ceil(size.y / cell_size)) + 2):
-            var y_pos := start_y + float(y) * cell_size
-            draw_line(Vector2(0.0, y_pos), Vector2(size.x, y_pos), line_color, 1.0)
+        if base_texture != null:
+            var first_x := floori(-origin.x / cell_size) - 1
+            var last_x := ceili((size.x - origin.x) / cell_size) + 1
+            var first_y := floori(-origin.y / cell_size) - 1
+            var last_y := ceili((size.y - origin.y) / cell_size) + 1
+            for y in range(first_y, last_y + 1):
+                for x in range(first_x, last_x + 1):
+                    var grass_rect := Rect2(origin + Vector2(x, y) * cell_size, Vector2.ONE * cell_size)
+                    draw_texture_rect(base_texture, grass_rect, false, Color.WHITE)
+        else:
+            draw_rect(Rect2(Vector2.ZERO, size), Color("829544"))
 
     func _build_field_cache() -> void:
         for tile_id in range(1, 65):
@@ -1502,6 +1509,7 @@ class MapTerrainLayer extends Control:
                 continue
             field_textures[tile_id] = texture
             field_edges[tile_id] = _edge_signature(texture)
+        base_texture = field_textures.get(BASE_FIELD, null) as Texture2D
 
     func _build_route_cache() -> void:
         route_cells.clear()
@@ -1566,12 +1574,47 @@ class MapTerrainLayer extends Control:
     func _is_grass(color: Color) -> bool:
         return color.a > 0.05 and color.g > color.r * 0.9 and color.g > color.b * 1.25 and color.r < 0.85
 
+class MapGridLayer extends Control:
+    const GRID_SIZE := 36
+    var visual_board_size := 0.0
+    var visual_zoom := 1.0
+    var visual_pan := Vector2.ZERO
+    var visual_origin := Vector2.ZERO
+
+    func _ready() -> void:
+        mouse_filter = Control.MOUSE_FILTER_IGNORE
+        texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
+    func sync(board_size: float, map_zoom: float, map_pan: Vector2, board_origin: Vector2) -> void:
+        visual_board_size = board_size
+        visual_zoom = map_zoom
+        visual_pan = map_pan
+        visual_origin = board_origin
+        queue_redraw()
+
+    func _draw() -> void:
+        if visual_board_size <= 0.0: return
+        var cell_size := visual_board_size / float(GRID_SIZE) * visual_zoom
+        if cell_size <= 0.0: return
+        var origin := visual_origin + visual_pan
+        var line_color := Color(1.0, 1.0, 1.0, 0.10)
+        var first_x := floori(-origin.x / cell_size) - 1
+        var last_x := ceili((size.x - origin.x) / cell_size) + 1
+        var first_y := floori(-origin.y / cell_size) - 1
+        var last_y := ceili((size.y - origin.y) / cell_size) + 1
+        for x in range(first_x, last_x + 1):
+            var x_pos := origin.x + float(x) * cell_size
+            draw_line(Vector2(x_pos, 0.0), Vector2(x_pos, size.y), line_color, 1.0)
+        for y in range(first_y, last_y + 1):
+            var y_pos := origin.y + float(y) * cell_size
+            draw_line(Vector2(0.0, y_pos), Vector2(size.x, y_pos), line_color, 1.0)
+
 class MapDecorationLayer extends Control:
     const GRID_SIZE := 36
     var runtime: GameRuntime
     var generated := false
     var decorations: Array[TextureRect] = []
-    var flag: FlagDecoration
+    var waypoint_flags: Dictionary = {}
     var rng := RandomNumberGenerator.new()
     const DECORATION_PATHS := [
         "res://assets/art/gameplay/environment/vegetation/grass/1.png",
@@ -1590,9 +1633,6 @@ class MapDecorationLayer extends Control:
         mouse_filter = Control.MOUSE_FILTER_IGNORE
         texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
         rng.seed = 8129
-        flag = FlagDecoration.new()
-        flag.visible = false
-        add_child(flag)
 
     func sync(board_size: float, map_zoom: float, map_pan: Vector2, board_origin: Vector2) -> void:
         if runtime == null or board_size <= 0.0: return
@@ -1606,8 +1646,24 @@ class MapDecorationLayer extends Control:
             var display_size := source_size * (target / max_dimension)
             decoration.size = display_size
             decoration.position = board_origin + map_pan + (Vector2(cell) + Vector2.ONE * 0.5) * cell_size * map_zoom - display_size * 0.5
-        if is_instance_valid(flag) and runtime.map != null:
-            flag.sync_cell(runtime.map.endpoint, cell_size, map_zoom, map_pan, board_origin)
+        var live_flags := {}
+        if runtime.map != null:
+            for point: Vector2i in runtime.map.ordered_waypoints():
+                if point == runtime.map.spawn: continue
+                var key := str(point)
+                var waypoint_flag := waypoint_flags.get(key) as FlagDecoration
+                if not is_instance_valid(waypoint_flag):
+                    waypoint_flag = FlagDecoration.new()
+                    add_child(waypoint_flag)
+                    waypoint_flags[key] = waypoint_flag
+                waypoint_flag.sync_cell(point, cell_size, map_zoom, map_pan, board_origin)
+                waypoint_flag.visible = waypoint_flag.texture != null
+                live_flags[key] = true
+        for key in waypoint_flags.keys():
+            if live_flags.has(key): continue
+            var stale_flag := waypoint_flags[key] as FlagDecoration
+            if is_instance_valid(stale_flag): stale_flag.queue_free()
+            waypoint_flags.erase(key)
 
     func _generate_decorations() -> void:
         generated = true
@@ -1636,8 +1692,6 @@ class MapDecorationLayer extends Control:
                 decoration.set_meta("cell", cell)
                 add_child(decoration)
                 decorations.append(decoration)
-        flag.visible = runtime != null and runtime.map != null
-
     func _near_route(cell: Vector2i, route: Dictionary) -> bool:
         for dy in range(-1, 2):
             for dx in range(-1, 2):
@@ -1658,8 +1712,13 @@ class FlagDecoration extends TextureRect:
         texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
         expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-        atlas.atlas = load(FRAME_PATH) as Texture2D
-        texture = atlas
+        var source := load(FRAME_PATH) as Texture2D
+        if source == null:
+            push_warning("Waypoint flag texture missing: %s" % FRAME_PATH)
+            texture = null
+        else:
+            atlas.atlas = source
+            texture = atlas
         set_process(true)
 
     func sync_cell(value: Vector2i, value_cell_size: float, value_zoom: float, value_pan: Vector2, value_origin: Vector2) -> void:
@@ -1670,6 +1729,7 @@ class FlagDecoration extends TextureRect:
         position = value_origin + map_pan + (Vector2(cell) + Vector2(0.5, 0.95)) * cell_size * map_zoom - Vector2(size.x * 0.5, size.y)
 
     func _process(_delta: float) -> void:
+        if atlas.atlas == null: return
         var next_frame := int(Time.get_ticks_msec() / 160) % 6
         if next_frame == current_frame: return
         current_frame = next_frame
