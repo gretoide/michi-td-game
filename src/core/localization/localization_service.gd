@@ -3,6 +3,20 @@ extends Node
 signal locale_changed(locale: String)
 const DEFAULT_LOCALE := "en"
 const SUPPORTED_LOCALES := ["en", "es"]
+const ENEMY_DISPLAY_NAMES := {
+    "en": {
+        "frenzied_pig": "Frenzied Catomancer",
+        "swift_frog_w2": "Swift Shadow Catomancer",
+        "invisible_spider_w8": "Invisible Webcatomancer",
+        "thrilling_ghost_w40": "Spectral Catomancer"
+    },
+    "es": {
+        "frenzied_pig": "Gatomante Frenético",
+        "swift_frog_w2": "Gatomante Sombra Saltarín",
+        "invisible_spider_w8": "Michi Tejedor Invisible",
+        "thrilling_ghost_w40": "Espectro Gatomante"
+    }
+}
 var locale := DEFAULT_LOCALE
 var diagnostics := PackedStringArray()
 var _catalog := {
@@ -101,6 +115,18 @@ func tr_key(key: String, values: Dictionary = {}) -> String:
     var result := str(selected.get(key, english.get(key, key)))
     for name in values: result = result.replace("{" + str(name) + "}", str(values[name]))
     return result
+
+func enemy_display_name(id: StringName, catalog_name: String = "") -> String:
+    var key := str(id)
+    var localized: Dictionary = ENEMY_DISPLAY_NAMES.get(locale, {})
+    if localized.has(key):
+        return str(localized[key])
+    var base := catalog_name.strip_edges()
+    if base.is_empty():
+        base = key.replace("_", " ").capitalize()
+    if locale == "es":
+        return "Gatomante " + base
+    return "Catomancer " + base
 
 func validate_catalog() -> PackedStringArray:
     var errors := PackedStringArray()

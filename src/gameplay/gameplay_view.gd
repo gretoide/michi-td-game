@@ -226,7 +226,27 @@ func _build_command_card(parent: Control) -> void:
     command_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     command_panel.add_theme_stylebox_override("panel", _hud_panel())
     parent.add_child(command_panel)
-    var column := VBoxContainer.new(); column.name = "VBoxContainer"; column.add_theme_constant_override("separation", 8); command_panel.add_child(column)
+    var sidebar_root := Control.new()
+    sidebar_root.name = "VBoxContainer"
+    sidebar_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    sidebar_root.clip_contents = false
+    command_panel.add_child(sidebar_root)
+    var sidebar_art := TextureRect.new()
+    sidebar_art.texture = load("res://assets/art/backgrounds/gameplay_sidebar.png") as Texture2D
+    sidebar_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    sidebar_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    sidebar_art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    # PanelContainer reserves its decorative margins for the child. Extend
+    # the artwork underneath those margins so no empty strips or seams show.
+    sidebar_art.offset_left = -18
+    sidebar_art.offset_top = -18
+    sidebar_art.offset_right = 18
+    sidebar_art.offset_bottom = 18
+    # Fade only the artwork; the UI controls retain their normal contrast.
+    sidebar_art.self_modulate = Color(1.0, 1.0, 1.0, 0.12)
+    sidebar_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    sidebar_root.add_child(sidebar_art)
+    var column := VBoxContainer.new(); column.name = "Content"; column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); column.add_theme_constant_override("separation", 8); sidebar_root.add_child(column)
     var title := Label.new(); title.name = "Title"; title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size", 18); column.add_child(title)
     var title_separator := HSeparator.new(); title_separator.add_theme_stylebox_override("separator", _strong_section_separator()); column.add_child(title_separator)
     var grid := VBoxContainer.new(); grid.name = "Grid"; grid.add_theme_constant_override("separation", 5); column.add_child(grid)
@@ -267,7 +287,8 @@ func _build_inspector(parent: Control) -> void:
     inspector.add_theme_stylebox_override("panel", _hud_panel())
     var target_parent: Node = parent
     if parent == command_panel and command_panel.get_child_count() > 0:
-        target_parent = command_panel.get_child(0)
+        var sidebar_root := command_panel.get_child(0)
+        target_parent = sidebar_root.get_node("Content")
     target_parent.add_child(inspector)
     var inspector_column := VBoxContainer.new()
     inspector_column.add_theme_constant_override("separation", 6)
@@ -287,7 +308,16 @@ func _build_inspector(parent: Control) -> void:
     var icon_frame := PanelContainer.new()
     icon_frame.custom_minimum_size = Vector2(32, 32)
     icon_frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    icon_frame.add_theme_stylebox_override("panel", _inner_panel())
+    var icon_style := StyleBoxFlat.new()
+    icon_style.bg_color = Color("5a321f")
+    icon_style.border_color = Color("c87a35")
+    icon_style.set_border_width_all(1)
+    icon_style.set_corner_radius_all(6)
+    icon_style.content_margin_left = 2
+    icon_style.content_margin_top = 2
+    icon_style.content_margin_right = 2
+    icon_style.content_margin_bottom = 2
+    icon_frame.add_theme_stylebox_override("panel", icon_style)
     inspector_header.add_child(icon_frame)
     inspector_icon = TextureRect.new()
     inspector_icon.custom_minimum_size = Vector2(26, 26)
@@ -318,7 +348,7 @@ func _build_inspector(parent: Control) -> void:
 func _rebuild_command_card() -> void:
     if command_model == null or runtime == null: return
     command_model.rebuild(runtime, selection)
-    var title := command_panel.get_node_or_null("VBoxContainer/Title") as Label
+    var title := command_panel.get_node_or_null("VBoxContainer/Content/Title") as Label
     if title != null: title.text = "Acciones" if LocalizationService.locale == "es" else "Actions"
     for i in command_buttons.size():
         var action: Dictionary = command_model.actions[i]
@@ -1237,7 +1267,9 @@ func _refresh_inspector_content() -> void:
     elif selection.kind == SelectionState.Kind.ENEMY:
         inspector_title_label.text = "Enemigo seleccionado" if LocalizationService.locale == "es" else "Selected enemy"
         var enemy: EnemyRuntime = selection.value
-        inspector_name_label.text = "[b]%s[/b]" % enemy.profile_id
+        var enemy_profile := runtime.foundation.catalog.enemy_profile_by_id(enemy.profile_id) as EnemyProfileDefinition
+        var catalog_name := enemy_profile.display_name if enemy_profile != null else ""
+        inspector_name_label.text = "[b]%s[/b]" % LocalizationService.enemy_display_name(enemy.profile_id, catalog_name)
         inspector_stats_label.text = "• HP: %.1f / %.1f\n• Armor: %.1f\n• Magic: %.1f" % [enemy.hp, enemy.max_hp, enemy.armor, enemy.magic_resistance]
     else:
         inspector_title_label.text = "Piedra seleccionada" if LocalizationService.locale == "es" else "Selected stone"
@@ -1254,7 +1286,9 @@ func _selection_summary() -> String:
         return "%s %s (Level %d)\nDamage: %.1f\nRange: %.1f\nAttack Speed: %.1f" % [_quality_label(gem.quality), _display_gem_name(gem.id), gem.level, stats.damage, stats.range_units, stats.total_attack_speed()]
     if selection.kind == SelectionState.Kind.ENEMY:
         var enemy: EnemyRuntime = selection.value
-        return LocalizationService.tr_key("game.selection.enemy", {"id": enemy.profile_id, "hp": snapped(enemy.hp, 0.1), "max_hp": snapped(enemy.max_hp, 0.1), "armor": enemy.armor, "magic": enemy.magic_resistance})
+        var enemy_profile := runtime.foundation.catalog.enemy_profile_by_id(enemy.profile_id) as EnemyProfileDefinition
+        var catalog_name := enemy_profile.display_name if enemy_profile != null else ""
+        return LocalizationService.tr_key("game.selection.enemy", {"id": LocalizationService.enemy_display_name(enemy.profile_id, catalog_name), "hp": snapped(enemy.hp, 0.1), "max_hp": snapped(enemy.max_hp, 0.1), "armor": enemy.armor, "magic": enemy.magic_resistance})
     if selection.kind == SelectionState.Kind.TOWER:
         var tower: TowerRuntime = selection.value
         return LocalizationService.tr_key("game.selection.tower", {"id": _display_gem_name(tower.id), "damage": snapped(tower.stats.damage, 0.1), "range": snapped(tower.stats.range_units, 0.1), "stopped": LocalizationService.tr_key("game.state.stopped" if tower.stopped else "game.state.active")})
