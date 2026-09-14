@@ -14,6 +14,9 @@ func run(suite: FoundationTestSuite) -> void:
 	suite.expect_equal(runtime.player_state.support_skills.size(), 0, "new game starts without support skills")
 	suite.expect_equal(runtime.phases.phase, GamePhaseMachine.Phase.CONSTRUCTION, "new game starts in Construction")
 	suite.expect_equal(runtime.map.checkpoints.size(), 5, "new game initializes canonical map")
+	suite.expect_equal(runtime.grid.state_at(Vector2i(0, 10)), GridModel.CellState.BLOCKED, "outer border is blocked for construction")
+	suite.expect_equal(runtime.grid.state_at(Vector2i(35, 35)), GridModel.CellState.BLOCKED, "outer corner is blocked for construction")
+	suite.expect(runtime.grid.is_walkable(Vector2i(1, 1)), "inner map remains available for construction")
 	suite.expect(not runtime.pathfinder.find_route(runtime.map).is_empty(), "path exists before gameplay input")
 	var spawn_state := {"profile": StringName()}
 	runtime.wave.enemy_spawned.connect(func(_enemy_id: int, profile: EnemyProfileDefinition): spawn_state.profile = profile.id)

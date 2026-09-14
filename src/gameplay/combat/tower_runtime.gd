@@ -27,4 +27,4 @@ func tick(delta: float, enemies: Array[EnemyRuntime], projectile_speed := 1000.0
 	var target := targeting.tick(position, stats.range_units, enemies)
 	if disarmed or target == null or cooldown > 0.0 or targeting.mode == TargetController.Mode.STOPPED: return null
 	var payload := DamagePipeline.DamageContext.new(); payload.base_damage = stats.damage; payload.damage_type = DamagePipeline.DamageType.PHYSICAL
-	var projectile := HomingProjectile.new(); projectile.setup(position, target, payload, projectile_speed); cooldown = stats.attack_interval(); attack_started.emit(target, projectile); return projectile
+	var projectile := HomingProjectile.new(); projectile.setup(position, target, payload, projectile_speed, gem.id); cooldown = stats.attack_interval(); attack_started.emit(target, projectile); return projectile

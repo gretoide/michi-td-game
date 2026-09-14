@@ -22,7 +22,7 @@ EffectSystem → MvpState
 
 `DamagePipeline` separa Physical, Magic y Pure y devuelve un resultado no negativo. `EffectRuntime`/`EffectSystem` proveen metadatos de escuela, debuff, duración y stacking para extender debuffs, DoT y auras sin hardcodear efectos en el loop de ataque.
 
-El HUD propio muestra fase, wave, torres, enemigos y proyectiles. El catálogo utilizado es bootstrap; el dataset completo de efectos/recetas permanece en M5 y el refinamiento visual final en M6.
+El HUD propio muestra fase, wave, gemas, enemigos y proyectiles. La unidad defensiva visible es siempre la gema; `TowerRuntime` se conserva como nombre técnico interno del emisor de combate. Cada proyectil guarda la gema de origen para elegir la animación de fuego de su color. El catálogo utilizado es bootstrap; el dataset completo de efectos/recetas permanece en M5 y el refinamiento visual final en M6.
 
 ## Verificación
 
@@ -30,4 +30,4 @@ El HUD propio muestra fase, wave, torres, enemigos y proyectiles. El catálogo u
 godot --headless --path michi-td-game --script res://test/gameplay/m3/run.gd
 ```
 
-La suite cubre stats, targeting, proyectiles, daño, inmunidades, efectos y el circuito torre → proyectil → impacto.
+La suite cubre stats, targeting, proyectiles, color de gema de origen, daño, inmunidades, efectos y el circuito gema → proyectil → impacto.

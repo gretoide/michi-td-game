@@ -37,4 +37,4 @@ La guía de arquitectura y la matriz de regresión están en `docs/README.md`.
 
 El access token se mantiene únicamente en memoria. Para reconocer al usuario al reabrir el juego se guarda solo el refresh token opaco en `user://session.cfg`; al cerrar sesión se revoca y se elimina. El idioma se guarda por separado en `user://preferences.cfg` y se conserva al crear una partida nueva.
 
-Los prototipos visuales de la partida usan el Fields tileset de CraftPix (licencia indicada en `assets`), las torres Spire Tower Pack 3 de Foozle (CC0), personajes Tiny RPG Soldier/Orc (licencia del pack) y elementos de interfaz Pixel UI de Kenney (CC0). Se mantuvieron los PNG originales pixel-perfect.
+Los prototipos visuales de la partida usan el Fields tileset de CraftPix (licencia indicada en `assets`), gemas como unidades defensivas, proyectiles Pixel Fireball Pack de growmaster, personajes Tiny RPG Soldier/Orc (licencia del pack) y elementos de interfaz Pixel UI de Kenney (CC0). Se mantuvieron los PNG originales pixel-perfect.

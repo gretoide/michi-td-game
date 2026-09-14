@@ -291,7 +291,7 @@ func _start_new_game() -> void:
     if is_instance_valid(verification): verification.queue_free()
     if is_instance_valid(welcome): welcome.queue_free()
     if is_instance_valid(gameplay_view): gameplay_view.queue_free()
-    gameplay_view = GameplayView.new(); add_child(gameplay_view); gameplay_view.main_menu_requested.connect(_on_gameplay_main_menu_requested); gameplay_view.logout_requested.connect(_on_gameplay_logout_requested); gameplay_view.setup(game_runtime, settings_store)
+    gameplay_view = GameplayView.new(); add_child(gameplay_view); gameplay_view.main_menu_requested.connect(_on_gameplay_main_menu_requested); gameplay_view.logout_requested.connect(_on_gameplay_logout_requested); gameplay_view.exit_requested.connect(_on_gameplay_exit_requested); gameplay_view.setup(game_runtime, settings_store)
 
 func _on_gameplay_main_menu_requested() -> void:
     if is_instance_valid(gameplay_view): gameplay_view.hide(); gameplay_view.queue_free()
@@ -305,6 +305,10 @@ func _on_gameplay_logout_requested() -> void:
     game_runtime = null
     auth.logout()
     _show_landing()
+
+func _on_gameplay_exit_requested() -> void:
+    get_tree().quit()
+
 func _on_verification_required(email: String) -> void: submit_button.disabled = false; verification_email = email if email != "" else email_input.text.strip_edges(); verification_password = password_input.text; _show_verification()
 func _show_verification() -> void:
     global_controls_layer.visible = true

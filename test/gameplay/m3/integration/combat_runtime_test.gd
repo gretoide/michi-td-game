@@ -10,8 +10,9 @@ func run(suite: FoundationTestSuite) -> void:
 	var tower := TowerRuntime.new(); tower.setup(gem, definition, Vector2.ZERO)
 	var combat := CombatRuntime.new(); combat.setup(1000.0, [Vector2i.ZERO, Vector2i(1, 0)]); combat.add_tower(tower)
 	var enemy := combat.spawn_enemy(profile, Vector2i(1, 0))
-	var started := {"value": false}; combat.projectile_created.connect(func(_projectile: HomingProjectile): started.value = true)
-	combat.tick(1.0); suite.expect(started.value, "tower creates a homing projectile in combat")
+	var started := {"value": false, "gem_id": StringName()}; combat.projectile_created.connect(func(projectile: HomingProjectile): started.value = true; started.gem_id = projectile.source_gem_id)
+	combat.tick(1.0); suite.expect(started.value, "gem creates a homing projectile in combat")
+	suite.expect_equal(started.gem_id, &"diamond", "projectile preserves the source gem color")
 	combat.tick(0.1); suite.expect(not enemy.is_alive(), "projectile impact applies damage and kills enemy")
 	suite.expect_equal(combat.enemies.size(), 0, "dead enemies are removed from combat runtime")
 

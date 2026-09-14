@@ -3,6 +3,7 @@ extends Control
 
 signal main_menu_requested
 signal logout_requested
+signal exit_requested
 
 const SelectionStateScript = preload("res://src/gameplay/ui/selection_state.gd")
 const CommandCardModelScript = preload("res://src/gameplay/ui/command_card_model.gd")
@@ -577,6 +578,7 @@ func _toggle_pause() -> void:
     var resume := Button.new(); resume.text = LocalizationService.tr_key("game.pause.resume"); resume.custom_minimum_size = Vector2(360, 48); resume.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; resume.process_mode = Node.PROCESS_MODE_ALWAYS; _style_modal_action_button(resume, true); resume.pressed.connect(_toggle_pause); column.add_child(resume)
     var main_menu := Button.new(); main_menu.text = LocalizationService.tr_key("game.pause.main_menu"); main_menu.icon = load("res://assets/ui/icons/gameplay/main_menu.png"); main_menu.expand_icon = true; main_menu.custom_minimum_size = Vector2(360, 46); main_menu.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; main_menu.process_mode = Node.PROCESS_MODE_ALWAYS; _style_modal_action_button(main_menu); main_menu.pressed.connect(func(): _show_exit_confirmation(false)); column.add_child(main_menu)
     var logout := Button.new(); logout.text = LocalizationService.tr_key("game.pause.logout"); logout.icon = load("res://assets/ui/icons/gameplay/logout.png"); logout.expand_icon = true; logout.custom_minimum_size = Vector2(360, 46); logout.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; logout.process_mode = Node.PROCESS_MODE_ALWAYS; _style_modal_action_button(logout, false, true); logout.pressed.connect(func(): _show_exit_confirmation(true)); column.add_child(logout)
+    var exit_game := Button.new(); exit_game.text = LocalizationService.tr_key("game.pause.exit"); exit_game.custom_minimum_size = Vector2(360, 46); exit_game.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; exit_game.process_mode = Node.PROCESS_MODE_ALWAYS; _style_modal_action_button(exit_game, false, true); exit_game.pressed.connect(_show_quit_confirmation); column.add_child(exit_game)
     add_child(pause_overlay)
     get_tree().paused = true
 
@@ -596,6 +598,16 @@ func _show_exit_confirmation(logout: bool) -> void:
     var cancel := Button.new(); cancel.text = LocalizationService.tr_key("game.pause.cancel"); cancel.process_mode = Node.PROCESS_MODE_ALWAYS; cancel.pressed.connect(_close_exit_confirmation); column.add_child(cancel)
     add_child(exit_confirm_overlay)
 
+func _show_quit_confirmation() -> void:
+    if exit_confirm_overlay != null: return
+    exit_confirm_overlay = _make_overlay(LocalizationService.tr_key("game.pause.confirm_exit"))
+    var column := _overlay_column(exit_confirm_overlay)
+    column.add_child(_close_icon_button(func(): _close_exit_confirmation()))
+    var message := Label.new(); message.text = LocalizationService.tr_key("game.pause.confirm_message"); message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; column.add_child(message)
+    var confirm := Button.new(); confirm.text = LocalizationService.tr_key("game.pause.confirm"); confirm.process_mode = Node.PROCESS_MODE_ALWAYS; confirm.pressed.connect(_confirm_quit); column.add_child(confirm)
+    var cancel := Button.new(); cancel.text = LocalizationService.tr_key("game.pause.cancel"); cancel.process_mode = Node.PROCESS_MODE_ALWAYS; cancel.pressed.connect(_close_exit_confirmation); column.add_child(cancel)
+    add_child(exit_confirm_overlay)
+
 func _close_exit_confirmation() -> void:
     if is_instance_valid(exit_confirm_overlay): exit_confirm_overlay.queue_free()
     exit_confirm_overlay = null
@@ -605,6 +617,11 @@ func _confirm_exit(logout: bool) -> void:
     get_tree().paused = false
     if logout: logout_requested.emit()
     else: main_menu_requested.emit()
+
+func _confirm_quit() -> void:
+    _close_exit_confirmation()
+    get_tree().paused = false
+    exit_requested.emit()
 
 func _add_gem_icon(parent: Control, gem_id: StringName, level: int, size: int) -> void:
     var icon := _make_gem_sprite(gem_id, level, size)
@@ -1175,7 +1192,7 @@ class MapDebugView extends Control:
     var drag_start := Vector2.ZERO
     var pan_start := Vector2.ZERO
     var placement_preview: TextureRect
-    const TOWER_TEXTURE := preload("res://assets/art/gameplay/towers/tower_05.png")
+    const PROJECTILE_TEXTURE := preload("res://assets/art/gameplay/projectiles/fireball_5_colors.png")
     const ENEMY_TEXTURE := preload("res://assets/art/gameplay/enemies/pipo_nekonin027.png")
     func _ready() -> void:
         mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1261,7 +1278,7 @@ class MapDebugView extends Control:
         _sync_spawner(scale_value)
         _sync_stone_sprites(scale_value)
         _sync_placement_preview(scale_value)
-        var sprite_size := maxf(12.0, scale_value * 0.75)
+        var sprite_size := maxf(12.0, scale_value * 1.05)
         for gem: GemInstance in runtime.construction.board_gems:
             var key := str(gem.get_instance_id())
             live[key] = true
@@ -1308,7 +1325,7 @@ class MapDebugView extends Control:
         if runtime == null or not is_instance_valid(spawner_decoration) or spawner_decoration.texture == null: return
         var source_size := spawner_decoration.texture.get_size()
         if source_size.y <= 0.0: return
-        var target_height := scale_value * 1.45 * map_zoom
+        var target_height := scale_value * 1.55 * map_zoom
         var target_size := source_size * (target_height / source_size.y)
         spawner_decoration.size = target_size
         var spawn_center := (Vector2(runtime.map.spawn) + Vector2(0.5, 0.95)) * scale_value * map_zoom + map_pan
@@ -1417,18 +1434,14 @@ class MapDebugView extends Control:
             var stone := stone_nodes.get(str(cell)) as StoneDecoration
             if not is_instance_valid(stone) or stone.texture == null:
                 draw_circle((Vector2(cell)+Vector2.ONE*0.5)*scale_value, maxf(4.0, scale_value * 0.3), Color("8b8f9a"))
-        for tower: TowerRuntime in runtime.combat.towers:
-            var tower_point := tower.position / 100.0 * scale_value
-            var tower_width := maxf(28.0, scale_value * 2.1)
-            var tower_rect := Rect2(tower_point + Vector2(-tower_width * 0.5, -tower_width * 1.55), Vector2(tower_width, tower_width * 2.0))
-            var tower_level := clampi(tower.gem.level if tower.gem != null else 1, 1, 3)
-            var tower_region := Rect2(float(tower_level - 1) * 64.0, 0.0, 64.0, 128.0)
-            draw_texture_rect_region(TOWER_TEXTURE, tower_rect, tower_region)
-            if view.selection.kind == SelectionState.Kind.TOWER and view.selection.value == tower: draw_circle(tower_point, maxf(12.0, scale_value * 0.8), Color("fff1a8"), false, 3.0)
+        if view.selection.kind == SelectionState.Kind.TOWER:
+            var selected_combat_gem := view.selection.value as TowerRuntime
+            if selected_combat_gem != null:
+                draw_circle(selected_combat_gem.position / 100.0 * scale_value, maxf(12.0, scale_value * 0.8), Color("fff1a8"), false, 3.0)
         for enemy: EnemyRuntime in runtime.combat.enemies:
             if enemy.is_alive():
                 var p := enemy.position / 100.0 * scale_value
-                var enemy_size := maxf(24.0, scale_value * 1.8)
+                var enemy_size := maxf(24.0, scale_value * 1.95)
                 var frame := int(Time.get_ticks_msec() / 160) % 3
                 var direction := Vector2.ZERO
                 if enemy.path_index < enemy.path.size() - 1: direction = enemy.path[enemy.path_index + 1] - enemy.position
@@ -1437,7 +1450,25 @@ class MapDebugView extends Control:
                 elif direction.y < 0.0: row = 3
                 draw_texture_rect_region(ENEMY_TEXTURE, Rect2(p-Vector2.ONE*enemy_size*0.5, Vector2.ONE*enemy_size), Rect2(frame * 32, row * 32, 32, 32))
                 draw_rect(Rect2(p+Vector2(-enemy_size*0.42,enemy_size*0.42),Vector2(enemy_size*0.84,4)),Color("3a1820")); draw_rect(Rect2(p+Vector2(-enemy_size*0.42,enemy_size*0.42),Vector2(enemy_size*0.84*enemy.hp/enemy.max_hp,4)),Color("e66b6b"))
-        for projectile: HomingProjectile in runtime.combat.projectiles: draw_circle(projectile.position/100.0*scale_value,4,Color("fff1a8"))
+        for projectile: HomingProjectile in runtime.combat.projectiles:
+            _draw_projectile(projectile, scale_value)
+        draw_set_transform(board_origin + map_pan, 0.0, Vector2.ONE * map_zoom)
+
+    func _draw_projectile(projectile: HomingProjectile, scale_value: float) -> void:
+        var projectile_point := projectile.position / 100.0 * scale_value
+        var projectile_size := maxf(12.0, scale_value * 1.05)
+        var frame := int(Time.get_ticks_msec() / 90.0) % 4
+        var row := _projectile_color_row(projectile.source_gem_id)
+        draw_set_transform(board_origin + map_pan + projectile_point * map_zoom, projectile.direction.angle(), Vector2.ONE * map_zoom)
+        draw_texture_rect_region(PROJECTILE_TEXTURE, Rect2(Vector2.ONE * projectile_size * -0.5, Vector2.ONE * projectile_size), Rect2(frame * 32.0, row * 32.0, 32.0, 32.0))
+
+    func _projectile_color_row(gem_id: StringName) -> int:
+        match view._gem_color_key(gem_id):
+            "purple", "lilac": return 1
+            "light_green": return 2
+            "red": return 3
+            "blue", "turquoise", "dark_blue": return 4
+            _: return 0
     func _gem_color(gem: GemInstance) -> Color:
         var colors := {&"amethyst":Color("b78cff"),&"aquamarine":Color("68d8e8"),&"diamond":Color("e9f6ff"),&"emerald":Color("55d889"),&"opal":Color("f3a7d8"),&"ruby":Color("ef6262"),&"sapphire":Color("6598ff"),&"topaz":Color("f4c95d")}; return colors.get(gem.id, Color("d99b50"))
 
@@ -1598,54 +1629,101 @@ class MapGridLayer extends Control:
         if cell_size <= 0.0: return
         var origin := visual_origin + visual_pan
         var line_color := Color(1.0, 1.0, 1.0, 0.10)
-        var first_x := floori(-origin.x / cell_size) - 1
-        var last_x := ceili((size.x - origin.x) / cell_size) + 1
-        var first_y := floori(-origin.y / cell_size) - 1
-        var last_y := ceili((size.y - origin.y) / cell_size) + 1
-        for x in range(first_x, last_x + 1):
+        # Keep the grid tied to the same 36x36 board as the terrain. Drawing
+        # only these boundaries prevents extra lines outside the board from
+        # making the cells look inconsistent while panning or zooming.
+        var board_end := origin + Vector2.ONE * visual_board_size * visual_zoom
+        for x in range(GRID_SIZE + 1):
             var x_pos := origin.x + float(x) * cell_size
-            draw_line(Vector2(x_pos, 0.0), Vector2(x_pos, size.y), line_color, 1.0)
-        for y in range(first_y, last_y + 1):
+            draw_line(Vector2(x_pos, origin.y), Vector2(x_pos, board_end.y), line_color, 1.0)
+        for y in range(GRID_SIZE + 1):
             var y_pos := origin.y + float(y) * cell_size
-            draw_line(Vector2(0.0, y_pos), Vector2(size.x, y_pos), line_color, 1.0)
+            draw_line(Vector2(origin.x, y_pos), Vector2(board_end.x, y_pos), line_color, 1.0)
 
 class MapDecorationLayer extends Control:
     const GRID_SIZE := 36
     var runtime: GameRuntime
     var generated := false
     var decorations: Array[TextureRect] = []
+    var border_fences: Array[TextureRect] = []
+    var border_trees: Array[TextureRect] = []
+    var field_tree_cells: Array[Vector2i] = []
+    var background_decorations: Array[TextureRect] = []
+    var small_nature_cells: Array[Vector2i] = []
     var waypoint_flags: Dictionary = {}
     var rng := RandomNumberGenerator.new()
-    const DECORATION_PATHS := [
-        "res://assets/art/gameplay/environment/vegetation/grass/1.png",
-        "res://assets/art/gameplay/environment/vegetation/grass/2.png",
-        "res://assets/art/gameplay/environment/vegetation/flowers/1.png",
-        "res://assets/art/gameplay/environment/vegetation/flowers/2.png",
-        "res://assets/art/gameplay/environment/vegetation/bushes/1.png",
-        "res://assets/art/gameplay/environment/vegetation/bushes/2.png",
-        "res://assets/art/gameplay/environment/props/logs/1.png",
-        "res://assets/art/gameplay/environment/props/boxes/1.png",
-        "res://assets/art/gameplay/environment/props/lamps/1.png",
-        "res://assets/art/gameplay/environment/props/trees/1.png",
-    ]
+    var decoration_catalog: Array[Dictionary] = []
+    var decoration_cursor := 0
 
     func _ready() -> void:
         mouse_filter = Control.MOUSE_FILTER_IGNORE
         texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
         rng.seed = 8129
+        decoration_catalog = _build_decoration_catalog()
 
     func sync(board_size: float, map_zoom: float, map_pan: Vector2, board_origin: Vector2) -> void:
         if runtime == null or board_size <= 0.0: return
-        if not generated: _generate_decorations()
+        if not generated:
+            _generate_decorations()
+            _generate_border_fences()
+            _generate_border_trees()
+            _generate_field_trees()
+            _generate_background_decorations()
         var cell_size := board_size / float(GRID_SIZE)
         for decoration: TextureRect in decorations:
             var cell := decoration.get_meta("cell", Vector2i.ZERO) as Vector2i
-            var target := maxf(8.0, cell_size * 0.84) * map_zoom
+            var category := str(decoration.get_meta("category", "props"))
+            var occupancy := 0.44 if category in ["grass", "flowers"] else (0.68 if category == "dirt" else (0.76 if category == "bushes" else 0.90))
+            var target := maxf(8.0, cell_size * occupancy) * map_zoom
             var source_size := decoration.texture.get_size() if decoration.texture != null else Vector2.ONE
             var max_dimension := maxf(1.0, maxf(source_size.x, source_size.y))
             var display_size := source_size * (target / max_dimension)
             decoration.size = display_size
             decoration.position = board_origin + map_pan + (Vector2(cell) + Vector2.ONE * 0.5) * cell_size * map_zoom - display_size * 0.5
+        for fence: TextureRect in border_fences:
+            var cell := fence.get_meta("cell", Vector2i.ZERO) as Vector2i
+            var vertical := bool(fence.get_meta("vertical", false))
+            var source_size := fence.texture.get_size() if fence.texture != null else Vector2.ONE
+            var target_length := cell_size * 1.18 * map_zoom
+            var corner := bool(fence.get_meta("corner", false))
+            var source_length := maxf(source_size.x, source_size.y) if corner else (source_size.y if vertical else source_size.x)
+            var display_size := source_size * (target_length / maxf(1.0, source_length))
+            fence.size = display_size
+            fence.pivot_offset = display_size * 0.5
+            fence.rotation = float(fence.get_meta("rotation", 0.0))
+            var center := board_origin + map_pan + (Vector2(cell) + Vector2.ONE * 0.5) * cell_size * map_zoom
+            fence.position = center - display_size * 0.5
+        for tree: TextureRect in border_trees:
+            var cell := tree.get_meta("cell", Vector2i.ZERO) as Vector2i
+            var side := str(tree.get_meta("side", "top"))
+            var scale_factor := float(tree.get_meta("scale_factor", 1.0))
+            var source_size := tree.texture.get_size() if tree.texture != null else Vector2.ONE
+            var base_height := 1.75 if side == "field" else 2.15
+            var target_height := cell_size * base_height * scale_factor * map_zoom
+            var display_size := source_size * (target_height / maxf(1.0, source_size.y))
+            var scaled_cell := cell_size * map_zoom
+            var map_top_left := board_origin + map_pan
+            match side:
+                "top":
+                    tree.position = map_top_left + Vector2((cell.x + 0.5) * scaled_cell - display_size.x * 0.5, scaled_cell * 0.05)
+                "bottom":
+                    tree.position = map_top_left + Vector2((cell.x + 0.5) * scaled_cell - display_size.x * 0.5, GRID_SIZE * scaled_cell - display_size.y - scaled_cell * 0.05)
+                "left":
+                    tree.position = map_top_left + Vector2(scaled_cell * 0.05, (cell.y + 1.0) * scaled_cell - display_size.y)
+                "field":
+                    tree.position = map_top_left + Vector2((cell.x + 0.5) * scaled_cell - display_size.x * 0.5, (cell.y + 1.0) * scaled_cell - display_size.y)
+                _:
+                    tree.position = map_top_left + Vector2(GRID_SIZE * scaled_cell - display_size.x - scaled_cell * 0.05, (cell.y + 1.0) * scaled_cell - display_size.y)
+            tree.size = display_size
+        for decoration: TextureRect in background_decorations:
+            var virtual_cell := decoration.get_meta("virtual_cell", Vector2i.ZERO) as Vector2i
+            var category := str(decoration.get_meta("category", "grass"))
+            var source_size := decoration.texture.get_size() if decoration.texture != null else Vector2.ONE
+            var occupancy := 1.35 if category == "tree" else (0.72 if category == "bush" else (0.42 if category == "flower" else 0.36))
+            var target := cell_size * occupancy * map_zoom
+            var display_size := source_size * (target / maxf(1.0, maxf(source_size.x, source_size.y)))
+            decoration.size = display_size
+            decoration.position = board_origin + map_pan + (Vector2(virtual_cell) + Vector2.ONE * 0.5) * cell_size * map_zoom - display_size * 0.5
         var live_flags := {}
         if runtime.map != null:
             for point: Vector2i in runtime.map.ordered_waypoints():
@@ -1676,9 +1754,16 @@ class MapDecorationLayer extends Control:
         for y in range(GRID_SIZE):
             for x in range(GRID_SIZE):
                 var cell := Vector2i(x, y)
+                if x == 0 or y == 0 or x == GRID_SIZE - 1 or y == GRID_SIZE - 1: continue
                 if route.has(str(cell)) or points.has(str(cell)) or _near_route(cell, route): continue
-                if rng.randf() > 0.075: continue
-                var path: String = DECORATION_PATHS[rng.randi_range(0, DECORATION_PATHS.size() - 1)]
+                if decoration_catalog.is_empty(): continue
+                var entry: Dictionary = decoration_catalog[decoration_cursor % decoration_catalog.size()]
+                decoration_cursor += 1
+                var category: String = entry["category"]
+                var chance := 0.24 if category in ["grass", "flowers"] else 0.10
+                if rng.randf() > chance: continue
+                if category in ["grass", "flowers"] and _near_small_nature(cell): continue
+                var path: String = entry["path"]
                 var texture := load(path) as Texture2D
                 if texture == null:
                     push_warning("Map decoration missing: %s" % path)
@@ -1690,8 +1775,241 @@ class MapDecorationLayer extends Control:
                 decoration.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
                 decoration.mouse_filter = Control.MOUSE_FILTER_IGNORE
                 decoration.set_meta("cell", cell)
+                decoration.set_meta("category", entry["category"])
                 add_child(decoration)
                 decorations.append(decoration)
+                if category in ["grass", "flowers"]: small_nature_cells.append(cell)
+
+    func _generate_border_fences() -> void:
+        if runtime == null or runtime.grid == null: return
+        for x in range(1, GRID_SIZE - 1):
+            _add_border_fence(Vector2i(x, 0), false, x)
+            _add_border_fence(Vector2i(x, GRID_SIZE - 1), false, x + 2)
+        for y in range(1, GRID_SIZE - 1):
+            _add_border_fence(Vector2i(0, y), true, y)
+            _add_border_fence(Vector2i(GRID_SIZE - 1, y), true, y + 2)
+        _add_corner_fence(Vector2i(0, 0), 0.0)
+        _add_corner_fence(Vector2i(GRID_SIZE - 1, 0), PI * 0.5)
+        _add_corner_fence(Vector2i(GRID_SIZE - 1, GRID_SIZE - 1), PI)
+        _add_corner_fence(Vector2i(0, GRID_SIZE - 1), -PI * 0.5)
+
+    func _add_border_fence(cell: Vector2i, vertical: bool, variant_seed: int) -> void:
+        if runtime.grid.state_at(cell) != GridModel.CellState.BLOCKED: return
+        var variant := posmod(variant_seed, 4) + 1
+        var path := "res://assets/art/gameplay/environment/props/fences/%d.png" % variant
+        if vertical:
+            path = "res://assets/art/gameplay/environment/props/fences/7.png"
+        var texture := load(path) as Texture2D
+        if texture == null:
+            push_warning("Map fence missing: %s" % path)
+            return
+        var fence := TextureRect.new()
+        fence.texture = texture
+        fence.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+        fence.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        fence.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        fence.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        fence.set_meta("cell", cell)
+        fence.set_meta("vertical", vertical)
+        add_child(fence)
+        border_fences.append(fence)
+
+    func _add_corner_fence(cell: Vector2i, rotation: float) -> void:
+        if runtime.grid.state_at(cell) != GridModel.CellState.BLOCKED: return
+        var texture := load("res://assets/art/gameplay/environment/props/fences/6.png") as Texture2D
+        if texture == null:
+            push_warning("Map corner fence missing: res://assets/art/gameplay/environment/props/fences/6.png")
+            return
+        var fence := TextureRect.new()
+        fence.texture = texture
+        fence.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+        fence.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        fence.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        fence.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        fence.set_meta("cell", cell)
+        fence.set_meta("vertical", false)
+        fence.set_meta("corner", true)
+        fence.set_meta("rotation", rotation)
+        add_child(fence)
+        border_fences.append(fence)
+
+    func _generate_border_trees() -> void:
+        var top_positions := _random_border_positions(1701)
+        var bottom_positions := _random_border_positions(2837)
+        for x in top_positions:
+            _add_border_tree(Vector2i(x, 0), "top", x)
+        for x in bottom_positions:
+            _add_border_tree(Vector2i(x, GRID_SIZE - 1), "bottom", x + 2)
+        var left_positions := _random_border_positions(3919)
+        var right_positions := _random_border_positions(4721)
+        for y in left_positions:
+            _add_border_tree(Vector2i(0, y), "left", y)
+        for y in right_positions:
+            _add_border_tree(Vector2i(GRID_SIZE - 1, y), "right", y + 2)
+
+    func _random_border_positions(seed_value: int) -> Array[int]:
+        var local_rng := RandomNumberGenerator.new()
+        local_rng.seed = seed_value
+        var result: Array[int] = []
+        var target_count := local_rng.randi_range(2, 3)
+        var attempts := 0
+        while result.size() < target_count and attempts < 80:
+            attempts += 1
+            var position := local_rng.randi_range(3, GRID_SIZE - 4)
+            var valid := true
+            for other: int in result:
+                if absi(position - other) < 6:
+                    valid = false
+                    break
+            if valid: result.append(position)
+        result.sort()
+        return result
+
+    func _generate_field_trees() -> void:
+        if runtime == null or runtime.grid == null or runtime.pathfinder == null or runtime.map == null: return
+        var route := {}
+        for cell: Vector2i in runtime.pathfinder.find_route(runtime.map): route[str(cell)] = true
+        var points := {}
+        for point: Vector2i in runtime.map.ordered_waypoints(): points[str(point)] = true
+        var candidates: Array[Vector2i] = []
+        for y in range(1, GRID_SIZE - 1):
+            for x in range(1, GRID_SIZE - 1):
+                var cell := Vector2i(x, y)
+                if route.has(str(cell)) or points.has(str(cell)) or _near_route(cell, route): continue
+                if runtime.grid.state_at(cell) == GridModel.CellState.BLOCKED: continue
+                candidates.append(cell)
+        # Add a few asymmetric trees just inside the fence.
+        var inner_candidates: Array[Vector2i] = []
+        for cell: Vector2i in candidates:
+            var edge_distance := mini(cell.x, mini(cell.y, mini(GRID_SIZE - 1 - cell.x, GRID_SIZE - 1 - cell.y)))
+            if edge_distance <= 2: inner_candidates.append(cell)
+        var inner_attempts := 0
+        while field_tree_cells.size() < 3 and not inner_candidates.is_empty() and inner_attempts < 40:
+            inner_attempts += 1
+            var inner_index := rng.randi_range(0, inner_candidates.size() - 1)
+            var inner_cell: Vector2i = inner_candidates[inner_index]
+            inner_candidates.remove_at(inner_index)
+            if _near_field_tree(inner_cell) or _near_small_nature(inner_cell): continue
+            if _add_field_tree(inner_cell, inner_attempts): field_tree_cells.append(inner_cell)
+        var attempts := 0
+        while field_tree_cells.size() < 10 and not candidates.is_empty() and attempts < 120:
+            attempts += 1
+            var candidate_index := rng.randi_range(0, candidates.size() - 1)
+            var cell: Vector2i = candidates[candidate_index]
+            candidates.remove_at(candidate_index)
+            if _near_field_tree(cell) or _near_small_nature(cell): continue
+            if _add_field_tree(cell, attempts): field_tree_cells.append(cell)
+
+    func _generate_background_decorations() -> void:
+        if runtime == null: return
+        var candidates: Array[Vector2i] = []
+        var cell_size := maxf(1.0, minf(size.x, size.y) / float(GRID_SIZE))
+        var margin_cells := maxi(4, ceili(maxf(size.x, size.y) / cell_size) + 2)
+        for y in range(-margin_cells, GRID_SIZE + margin_cells):
+            for x in range(-margin_cells, GRID_SIZE + margin_cells):
+                var outside := x < 0 or y < 0 or x >= GRID_SIZE or y >= GRID_SIZE
+                if not outside: continue
+                # Keep clear spots so the outer field feels scattered.
+                if posmod(x * 13 + y * 7, 7) > 1: continue
+                candidates.append(Vector2i(x, y))
+        var catalog := _background_decoration_catalog()
+        var accepted_cells: Array[Vector2i] = []
+        var exterior_tree_count := 0
+        for cell: Vector2i in candidates:
+            if rng.randf() > 0.30: continue
+            if _near_background_cell(cell, accepted_cells, 2.0): continue
+            var entry: Dictionary = catalog[rng.randi_range(0, catalog.size() - 1)]
+            if entry["category"] == "tree":
+                if exterior_tree_count >= 6 or rng.randf() > 0.35: continue
+                exterior_tree_count += 1
+            var path: String = entry["path"]
+            var texture := load(path) as Texture2D
+            if texture == null: continue
+            var decoration := TextureRect.new()
+            decoration.texture = texture
+            decoration.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+            decoration.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+            decoration.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+            decoration.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            decoration.set_meta("virtual_cell", cell)
+            decoration.set_meta("category", entry["category"])
+            add_child(decoration)
+            background_decorations.append(decoration)
+            accepted_cells.append(cell)
+
+    func _near_background_cell(cell: Vector2i, accepted: Array[Vector2i], distance: float) -> bool:
+        for other: Vector2i in accepted:
+            if cell.distance_to(other) < distance: return true
+        return false
+
+    func _add_border_tree(cell: Vector2i, side: String, variant_seed: int) -> void:
+        _add_tree(cell, side, variant_seed, true)
+
+    func _add_field_tree(cell: Vector2i, variant_seed: int) -> bool:
+        return _add_tree(cell, "field", variant_seed, false)
+
+    func _add_tree(cell: Vector2i, side: String, variant_seed: int, blocked_only: bool) -> bool:
+        if runtime == null or runtime.grid == null: return false
+        if blocked_only and runtime.grid.state_at(cell) != GridModel.CellState.BLOCKED: return false
+        var path := "res://assets/art/gameplay/environment/props/trees/Tree1.png"
+        var texture := load(path) as Texture2D
+        if texture == null:
+            push_warning("Map tree missing: %s" % path)
+            return false
+        var tree := TextureRect.new()
+        tree.texture = texture
+        tree.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+        tree.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        tree.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        tree.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        tree.set_meta("cell", cell)
+        tree.set_meta("side", side)
+        tree.set_meta("scale_factor", 0.92 + float(posmod(variant_seed, 3)) * 0.08)
+        add_child(tree)
+        border_trees.append(tree)
+        return true
+
+    func _near_field_tree(cell: Vector2i) -> bool:
+        for other: Vector2i in field_tree_cells:
+            if cell.distance_to(other) < 6.0: return true
+        return false
+
+    func _build_decoration_catalog() -> Array[Dictionary]:
+        var result: Array[Dictionary] = []
+        for index in range(1, 7):
+            result.append({"path": "res://assets/art/gameplay/environment/vegetation/grass/%d.png" % index, "category": "grass"})
+        for index in range(1, 13):
+            result.append({"path": "res://assets/art/gameplay/environment/vegetation/flowers/%d.png" % index, "category": "flowers"})
+        for index in range(1, 7):
+            result.append({"path": "res://assets/art/gameplay/environment/vegetation/bushes/%d.png" % index, "category": "bushes"})
+        for index in range(1, 7):
+            result.append({"path": "res://assets/art/gameplay/environment/props/dirt/Dirt%d.png" % index, "category": "dirt"})
+        for index in range(1, 5):
+            result.append({"path": "res://assets/art/gameplay/environment/props/logs/Log%d.png" % index, "category": "props"})
+        for index in range(1, 5):
+            result.append({"path": "res://assets/art/gameplay/environment/props/boxes/Box%d.png" % index, "category": "props"})
+        for index in range(1, 7):
+            result.append({"path": "res://assets/art/gameplay/environment/props/lamps/Lamp%d.png" % index, "category": "props"})
+        result.append({"path": "res://assets/art/gameplay/environment/props/trees/Tree2.png", "category": "props"})
+        return result
+
+    func _background_decoration_catalog() -> Array[Dictionary]:
+        var result: Array[Dictionary] = []
+        for index in range(1, 7):
+            result.append({"path": "res://assets/art/gameplay/environment/vegetation/grass/%d.png" % index, "category": "grass"})
+        for index in range(1, 13):
+            result.append({"path": "res://assets/art/gameplay/environment/vegetation/flowers/%d.png" % index, "category": "flower"})
+        for index in range(1, 7):
+            result.append({"path": "res://assets/art/gameplay/environment/vegetation/bushes/%d.png" % index, "category": "bush"})
+        for index in range(1, 3):
+            result.append({"path": "res://assets/art/gameplay/environment/props/trees/Tree%d.png" % index, "category": "tree"})
+        return result
+
+    func _near_small_nature(cell: Vector2i) -> bool:
+        for other: Vector2i in small_nature_cells:
+            if cell.distance_to(other) < 2.5: return true
+        return false
+
     func _near_route(cell: Vector2i, route: Dictionary) -> bool:
         for dy in range(-1, 2):
             for dx in range(-1, 2):
@@ -1723,7 +2041,7 @@ class FlagDecoration extends TextureRect:
 
     func sync_cell(value: Vector2i, value_cell_size: float, value_zoom: float, value_pan: Vector2, value_origin: Vector2) -> void:
         cell = value; cell_size = value_cell_size; map_zoom = value_zoom; map_pan = value_pan
-        var target_height := cell_size * 1.35 * map_zoom
+        var target_height := cell_size * 1.45 * map_zoom
         var source_size := Vector2(32, 64)
         size = source_size * (target_height / source_size.y)
         position = value_origin + map_pan + (Vector2(cell) + Vector2(0.5, 0.95)) * cell_size * map_zoom - Vector2(size.x * 0.5, size.y)

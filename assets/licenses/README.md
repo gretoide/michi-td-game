@@ -15,5 +15,6 @@ Inventario de los recursos que forman parte del runtime actual. Fecha de revisi�
 | Kenney Cursor Pixel Pack | `assets/ui/cursors/*.png` | Kenney; https://www.kenney.nl/ | CC0 | Atribución opcional: Kenney / www.kenney.nl |
 | Kenney Interface Sounds | `assets/audio/ui/*.ogg` | Kenney; https://www.kenney.nl/ | CC0 | Atribución opcional: Kenney / www.kenney.nl |
 | Kenney UI Pack RPG Expansion (panel marrón) | `assets/ui/panels/rpg_panel_brown.png` | Kenney; https://www.kenney.nl/ | CC0 | Atribución opcional: Kenney / www.kenney.nl |
+| Pixel Fireball Pack - 5 Colors | `assets/art/gameplay/projectiles/fireball_5_colors.png` | growmaster; https://growmasterart.itch.io/pixel-fireball-pack-5-colors | Uso comercial y no comercial permitido | No requerida |
 
 No se conserva Buddy Champion: su EULA sólo cubría esa familia tipográfica y no se debe aplicar a los gráficos Fantasy Wooden GUI.

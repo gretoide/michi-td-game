@@ -38,6 +38,7 @@ func initialize(seed: int = -1) -> PackedStringArray:
 	var map_errors := map.validate_for(grid)
 	if not map_errors.is_empty(): return map_errors
 	for waypoint: Vector2i in map.ordered_waypoints(): grid.reserve(waypoint)
+	_block_outer_border()
 	foundation = GameplayFoundation.new()
 	var loaded := foundation.initialize(seed)
 	if not loaded.is_valid():
@@ -76,6 +77,14 @@ func initialize(seed: int = -1) -> PackedStringArray:
 	outcome.defeated.connect(func(): outcome_state = "defeat")
 	outcome.victorious.connect(func(): outcome_state = "victory")
 	return PackedStringArray()
+
+func _block_outer_border() -> void:
+	for x in range(GridModel.WIDTH):
+		grid.block(Vector2i(x, 0))
+		grid.block(Vector2i(x, GridModel.HEIGHT - 1))
+	for y in range(1, GridModel.HEIGHT - 1):
+		grid.block(Vector2i(0, y))
+		grid.block(Vector2i(GridModel.WIDTH - 1, y))
 
 func start_first_wave() -> bool:
 	if wave == null or wave.is_active(): return false
