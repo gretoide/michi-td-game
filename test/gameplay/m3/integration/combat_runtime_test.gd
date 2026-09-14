@@ -4,6 +4,9 @@ func run(suite: FoundationTestSuite) -> void:
 	_test_select_final_gem(suite)
 	_test_selection_before_placement(suite)
 	_test_game_runtime_starts_wave_after_keep(suite)
+	_test_refresh_enemy_paths_preserves_progress(suite)
+	_test_clear_projectiles_on_phase_end(suite)
+	_test_magic_gem_damages_physical_immune_enemy(suite)
 	var profile := EnemyProfileDefinition.new(); profile.id = &"test"; profile.hp = 25.0; profile.base_speed = 20.0
 	var definition := GemDefinition.new(); definition.id = &"diamond"; definition.levels = [{"level": 1, "damage": 50.0, "range": 1000.0, "base_attack_speed": 100.0, "bat": 1.0}]
 	var gem := GemInstance.new(&"diamond", 1, GemInstance.Quality.CHIPPED)
@@ -15,6 +18,40 @@ func run(suite: FoundationTestSuite) -> void:
 	suite.expect_equal(started.gem_id, &"diamond", "projectile preserves the source gem color")
 	combat.tick(0.1); suite.expect(not enemy.is_alive(), "projectile impact applies damage and kills enemy")
 	suite.expect_equal(combat.enemies.size(), 0, "dead enemies are removed from combat runtime")
+
+func _test_refresh_enemy_paths_preserves_progress(suite: FoundationTestSuite) -> void:
+	var profile := EnemyProfileDefinition.new(); profile.id = &"path_refresh"; profile.hp = 25.0; profile.base_speed = 20.0
+	var combat := CombatRuntime.new()
+	combat.setup(1000.0, [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)])
+	var enemy := combat.spawn_enemy(profile, Vector2i(0, 0))
+	combat.tick(1.0)
+	var position_before := enemy.position
+	combat.refresh_enemy_paths([Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)])
+	suite.expect(enemy.position.is_equal_approx(position_before), "path refresh preserves the enemy position")
+	suite.expect_equal(combat.path_cells.size(), 4, "combat stores the latest global route")
+	combat.tick(1.0)
+	suite.expect(enemy.position != position_before, "enemy continues moving on the refreshed route")
+
+func _test_clear_projectiles_on_phase_end(suite: FoundationTestSuite) -> void:
+	var profile := EnemyProfileDefinition.new(); profile.id = &"projectile_cleanup"; profile.hp = 100.0; profile.base_speed = 20.0
+	var definition := GemDefinition.new(); definition.id = &"diamond"; definition.levels = [{"level": 1, "damage": 1.0, "range": 1000.0, "base_attack_speed": 1000.0, "bat": 1.0}]
+	var gem := GemInstance.new(&"diamond", 1, GemInstance.Quality.CHIPPED)
+	var tower := TowerRuntime.new(); tower.setup(gem, definition, Vector2.ZERO)
+	var combat := CombatRuntime.new(); combat.setup(1000.0, [Vector2i.ZERO, Vector2i(1, 0)]); combat.add_tower(tower); combat.spawn_enemy(profile, Vector2i(1, 0))
+	combat.tick(0.01)
+	suite.expect(combat.projectiles.size() > 0, "combat creates a projectile before phase cleanup")
+	combat.clear_projectiles()
+	suite.expect_equal(combat.projectiles.size(), 0, "phase cleanup removes all active projectiles")
+
+func _test_magic_gem_damages_physical_immune_enemy(suite: FoundationTestSuite) -> void:
+	var profile := EnemyProfileDefinition.new(); profile.id = &"physical_immune"; profile.hp = 100.0; profile.base_speed = 20.0; profile.ability_ids = PackedStringArray(["physical_immune"])
+	var definition := GemDefinition.new(); definition.id = &"emerald"; definition.levels = [{"level": 1, "damage": 25.0, "range": 1000.0, "base_attack_speed": 1000.0, "ability": "Poison 1"}]
+	var gem := GemInstance.new(&"emerald", 1, GemInstance.Quality.CHIPPED)
+	var tower := TowerRuntime.new(); tower.setup(gem, definition, Vector2.ZERO)
+	var combat := CombatRuntime.new(); combat.setup(1000.0, [Vector2i.ZERO, Vector2i(1, 0)]); combat.add_tower(tower)
+	var enemy := combat.spawn_enemy(profile, Vector2i(1, 0))
+	combat.tick(0.01); combat.tick(0.2)
+	suite.expect(enemy.hp < enemy.max_hp, "magic gem damages a physically immune enemy")
 
 func _test_selection_before_placement(suite: FoundationTestSuite) -> void:
 	var runtime := GameRuntime.new()

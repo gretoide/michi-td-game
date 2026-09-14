@@ -75,6 +75,12 @@ const GAMEPLAY_EXTRA := {
 func _init() -> void:
     for supported in SUPPORTED_LOCALES: _catalog[supported].merge(EXTRA_CATALOG[supported], true)
     for supported in SUPPORTED_LOCALES: _catalog[supported].merge(GAMEPLAY_EXTRA[supported], true)
+    _catalog["en"]["game.feedback.help"] = "Hover a valid cell and press Q to place a gem, or click to select."
+    _catalog["en"]["game.feedback.place_hint"] = "Hover a valid cell and press Q to place a gem."
+    _catalog["en"]["game.help.place"] = "Place: hover a valid cell during Construction and press Q. A valid placement occupies that cell."
+    _catalog["es"]["game.feedback.help"] = "Pasá sobre una celda válida y apretá Q para colocar una gema, o hacé click para seleccionar."
+    _catalog["es"]["game.feedback.place_hint"] = "Pasá sobre una celda válida y apretá Q para colocar una gema."
+    _catalog["es"]["game.help.place"] = "Colocar: pasá sobre una celda válida durante Construcción y apretá Q. Una colocación válida ocupa esa celda."
 
 func _ready() -> void:
     load_local_preference()

@@ -25,6 +25,11 @@ var feedback_label: Label
 var feedback_key := "game.feedback.help"
 var help_button: Button
 var inspector_label: Label
+var inspector_icon: TextureRect
+var inspector_name_label: RichTextLabel
+var inspector_stats_label: Label
+var inspector_panel: PanelContainer
+var inspector_title_label: Label
 var command_panel: PanelContainer
 var reward_overlay: PanelContainer
 var recipes_overlay: PanelContainer
@@ -36,13 +41,14 @@ var exit_confirm_overlay: PanelContainer
 var music_slider: HSlider
 var command_buttons: Array[Button] = []
 var LocalizationService: Node
-var recipe_rows: VBoxContainer
+var recipe_rows: Control
 var recipe_query := ""
 var recipe_filter := 0
 var recipe_color_filter := ""
 var _missing_gem_texture_diagnostics := {}
 var _gem_nodes: Dictionary = {}
 var _help_overlay: PanelContainer
+var place_gem_mode := false
 
 func setup(value: GameRuntime, shared_settings: SettingsStore = null) -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -88,8 +94,8 @@ func setup(value: GameRuntime, shared_settings: SettingsStore = null) -> void:
     play_column.add_theme_constant_override("separation", 8)
     body.add_child(play_column)
     _build_map(play_column)
-    _build_inspector(play_column)
     _build_command_card(body)
+    _build_inspector(command_panel)
     runtime.construction.gem_placed.connect(func(_gem): UiSoundManager.play_place(); map_view.sync_gem_sprites(); map_view.queue_redraw(); _refresh_ui())
     runtime.construction.stone_created.connect(func(_stone): map_view.sync_gem_sprites(); map_view.queue_redraw(); _refresh_ui())
     runtime.construction.construction_changed.connect(func(_count, _total): map_view.sync_gem_sprites(); map_view.queue_redraw(); _refresh_ui())
@@ -98,7 +104,7 @@ func setup(value: GameRuntime, shared_settings: SettingsStore = null) -> void:
         runtime.combat.projectile_created.connect(_on_projectile_created)
     if not runtime.outcome.life_changed.is_connected(_on_life_changed):
         runtime.outcome.life_changed.connect(_on_life_changed)
-    runtime.phases.phase_entered.connect(func(_phase): map_view.sync_gem_sprites(); _refresh_ui())
+    runtime.phases.phase_entered.connect(func(_phase): place_gem_mode = false; map_view.sync_gem_sprites(); _refresh_ui())
     runtime.outcome.victorious.connect(func(): _show_end(true))
     runtime.outcome.defeated.connect(func(): _show_end(false))
     runtime.support_rewards.reward_available.connect(_show_reward)
@@ -139,6 +145,8 @@ func _build_top_bar(parent: Control) -> void:
     row.add_child(spacer)
     var pause := Button.new(); pause.text = "Ⅱ"; pause.custom_minimum_size = Vector2(42, 38); pause.tooltip_text = LocalizationService.tr_key("game.pause"); pause.process_mode = Node.PROCESS_MODE_ALWAYS; pause.pressed.connect(_toggle_pause); row.add_child(pause)
     var settings_button := Button.new(); settings_button.icon = load("res://assets/ui/icons/gameplay/settings.png"); settings_button.expand_icon = true; settings_button.custom_minimum_size = Vector2(42, 38); settings_button.tooltip_text = LocalizationService.tr_key("game.settings.title"); settings_button.process_mode = Node.PROCESS_MODE_ALWAYS; settings_button.pressed.connect(_on_settings_pressed); row.add_child(settings_button)
+    var recipes_button := Button.new(); recipes_button.icon = load("res://assets/ui/icons/gameplay/recipes.png"); recipes_button.expand_icon = true; recipes_button.custom_minimum_size = Vector2(42, 38); recipes_button.tooltip_text = LocalizationService.tr_key("game.recipes.title"); recipes_button.process_mode = Node.PROCESS_MODE_ALWAYS; recipes_button.pressed.connect(_toggle_recipes); row.add_child(recipes_button)
+    var guide_button := Button.new(); guide_button.icon = load("res://assets/ui/icons/gameplay/help.png"); guide_button.expand_icon = true; guide_button.custom_minimum_size = Vector2(42, 38); guide_button.tooltip_text = LocalizationService.tr_key("game.help.title"); guide_button.process_mode = Node.PROCESS_MODE_ALWAYS; guide_button.pressed.connect(_toggle_help); row.add_child(guide_button)
 
 func _hud_separator() -> Label:
     var separator := Label.new()
@@ -218,8 +226,9 @@ func _build_command_card(parent: Control) -> void:
     command_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     command_panel.add_theme_stylebox_override("panel", _hud_panel())
     parent.add_child(command_panel)
-    var column := VBoxContainer.new(); column.add_theme_constant_override("separation", 8); command_panel.add_child(column)
+    var column := VBoxContainer.new(); column.name = "VBoxContainer"; column.add_theme_constant_override("separation", 8); command_panel.add_child(column)
     var title := Label.new(); title.name = "Title"; title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size", 18); column.add_child(title)
+    var title_separator := HSeparator.new(); title_separator.add_theme_stylebox_override("separator", _strong_section_separator()); column.add_child(title_separator)
     var grid := VBoxContainer.new(); grid.name = "Grid"; grid.add_theme_constant_override("separation", 5); column.add_child(grid)
     for _i in CommandCardModelScript.HOTKEYS.size():
         var button := Button.new()
@@ -241,25 +250,76 @@ func _build_command_card(parent: Control) -> void:
     feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     feedback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    feedback_label.custom_minimum_size = Vector2(0, 92)
+    feedback_label.text = LocalizationService.tr_key("game.feedback.help")
     feedback_panel.add_child(feedback_label)
-    help_button = Button.new(); help_button.text = LocalizationService.tr_key("game.help.title"); help_button.icon = load("res://assets/ui/icons/gameplay/help.png"); help_button.expand_icon = true; help_button.custom_minimum_size = Vector2(0, 38); _style_game_button(help_button); help_button.pressed.connect(_toggle_help); column.add_child(help_button)
-    var decoration_center := CenterContainer.new()
-    decoration_center.custom_minimum_size = Vector2(0, 46)
-    decoration_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    column.add_child(decoration_center)
-    decoration_center.add_child(CampfireDecoration.new())
+    var actions_separator := HSeparator.new()
+    actions_separator.add_theme_stylebox_override("separator", _strong_section_separator())
+    column.add_child(actions_separator)
+    help_button = Button.new(); help_button.text = LocalizationService.tr_key("game.help.title"); help_button.icon = load("res://assets/ui/icons/gameplay/help.png"); help_button.expand_icon = true; help_button.custom_minimum_size = Vector2(0, 38); _style_game_button(help_button); help_button.pressed.connect(_toggle_help); help_button.visible = false; column.add_child(help_button)
+    # Keep the command card clean; the decorative smoke competed with the
+    # contextual selection and action sections.
 
 func _build_inspector(parent: Control) -> void:
     var inspector := PanelContainer.new()
-    inspector.custom_minimum_size = Vector2(0, 54)
-    inspector.add_theme_stylebox_override("panel", _hud_panel()); parent.add_child(inspector)
-    inspector_label = Label.new(); inspector_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; inspector.add_child(inspector_label)
+    inspector_panel = inspector
+    inspector.custom_minimum_size = Vector2(0, 150)
+    inspector.add_theme_stylebox_override("panel", _hud_panel())
+    var target_parent: Node = parent
+    if parent == command_panel and command_panel.get_child_count() > 0:
+        target_parent = command_panel.get_child(0)
+    target_parent.add_child(inspector)
+    var inspector_column := VBoxContainer.new()
+    inspector_column.add_theme_constant_override("separation", 6)
+    inspector.add_child(inspector_column)
+    inspector_title_label = Label.new()
+    inspector_title_label.text = "Torre seleccionada" if LocalizationService.locale == "es" else "Selected tower"
+    inspector_title_label.add_theme_font_size_override("font_size", 14)
+    inspector_title_label.add_theme_color_override("font_color", Color("fff3d6"))
+    inspector_column.add_child(inspector_title_label)
+    var inspector_row := VBoxContainer.new()
+    inspector_row.add_theme_constant_override("separation", 10)
+    inspector_column.add_child(inspector_row)
+    var inspector_header := HBoxContainer.new()
+    inspector_header.add_theme_constant_override("separation", 6)
+    inspector_header.custom_minimum_size = Vector2(0, 36)
+    inspector_row.add_child(inspector_header)
+    var icon_frame := PanelContainer.new()
+    icon_frame.custom_minimum_size = Vector2(32, 32)
+    icon_frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    icon_frame.add_theme_stylebox_override("panel", _inner_panel())
+    inspector_header.add_child(icon_frame)
+    inspector_icon = TextureRect.new()
+    inspector_icon.custom_minimum_size = Vector2(26, 26)
+    inspector_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    inspector_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    inspector_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    inspector_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    inspector_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    icon_frame.add_child(inspector_icon)
+    inspector_name_label = RichTextLabel.new()
+    inspector_name_label.bbcode_enabled = true
+    inspector_name_label.fit_content = false
+    inspector_name_label.scroll_active = false
+    inspector_name_label.custom_minimum_size = Vector2(0, 32)
+    inspector_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    inspector_name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    inspector_name_label.add_theme_font_size_override("normal_font_size", 17)
+    inspector_name_label.add_theme_color_override("default_color", Color("fff3d6"))
+    inspector_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    inspector_header.add_child(inspector_name_label)
+    inspector_stats_label = Label.new()
+    inspector_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    inspector_stats_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    inspector_stats_label.add_theme_font_size_override("font_size", 14)
+    inspector_row.add_child(inspector_stats_label)
+    inspector_label = inspector_stats_label
 
 func _rebuild_command_card() -> void:
     if command_model == null or runtime == null: return
     command_model.rebuild(runtime, selection)
     var title := command_panel.get_node_or_null("VBoxContainer/Title") as Label
-    if title != null: title.text = LocalizationService.tr_key("game.command.title")
+    if title != null: title.text = "Acciones" if LocalizationService.locale == "es" else "Actions"
     for i in command_buttons.size():
         var action: Dictionary = command_model.actions[i]
         command_buttons[i].text = _command_label(action.id)
@@ -282,11 +342,13 @@ func _execute_command(index: int) -> void:
     if index < 0 or index >= command_model.actions.size(): return
     var id: String = command_model.actions[index].id
     match id:
-        "place_gem": _set_feedback("game.feedback.place_hint")
+        "place_gem": map_view.place_gem_at_hover()
         "select_gem": _set_feedback("game.feedback.select_hint")
         "combine": _combine_selected()
         "degrade": _degrade_selected()
         "remove_stone": _remove_selected_stone()
+        "attack": _attack_selected()
+        "stop": _stop_selected()
         "keep_gem": _keep_selected()
         "recipes": _toggle_recipes()
         "restart": _restart()
@@ -328,6 +390,19 @@ func _degrade_selected() -> void:
 func _set_feedback(key: String) -> void:
     feedback_key = key
     if is_instance_valid(feedback_label): feedback_label.text = LocalizationService.tr_key(feedback_key)
+
+func _attack_selected() -> void:
+    if selection.kind != SelectionState.Kind.TOWER: return
+    var tower := selection.value as TowerRuntime
+    if tower == null: return
+    for enemy: EnemyRuntime in runtime.combat.enemies:
+        if enemy.is_alive() and tower.attack(enemy): return
+    _set_feedback("game.feedback.invalid_action")
+
+func _stop_selected() -> void:
+    if selection.kind != SelectionState.Kind.TOWER: return
+    var tower := selection.value as TowerRuntime
+    if tower != null: tower.toggle_stop()
 
 func _keep_selected() -> void:
     if selection.kind == SelectionState.Kind.GEM: runtime.construction.keep(selection.value)
@@ -373,7 +448,7 @@ func _toggle_recipes() -> void:
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     list_margin.add_child(scroll)
     _style_modal_scrollbar(scroll.get_v_scroll_bar())
-    recipe_rows = VBoxContainer.new(); recipe_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL; recipe_rows.add_theme_constant_override("separation", 5); scroll.add_child(recipe_rows)
+    recipe_rows = GridContainer.new(); recipe_rows.columns = 3; recipe_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL; recipe_rows.add_theme_constant_override("h_separation", 8); recipe_rows.add_theme_constant_override("v_separation", 8); scroll.add_child(recipe_rows)
     _populate_recipes()
     add_child(recipes_overlay)
 
@@ -552,7 +627,7 @@ func _populate_recipes() -> void:
         if recipe_filter == 2 and recipe.result_id in runtime.foundation.catalog.gems.map(func(g): return g.id): continue
         if not recipe_color_filter.is_empty() and _gem_color_key(recipe.result_id) != recipe_color_filter: continue
         var row_panel := PanelContainer.new()
-        row_panel.custom_minimum_size = Vector2(0, 44)
+        row_panel.custom_minimum_size = Vector2(220, 92)
         row_panel.add_theme_stylebox_override("panel", _recipe_row_style(shown % 2 == 1))
         recipe_rows.add_child(row_panel)
         var row_margin := MarginContainer.new()
@@ -561,7 +636,12 @@ func _populate_recipes() -> void:
         row_panel.add_child(row_margin)
         var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); row_margin.add_child(row)
         _add_gem_icon(row, recipe.result_id, 1, 30)
-        var label := Label.new(); label.text = "%s → %s" % [_display_gem_name(recipe.id), _display_gem_name(recipe.result_id)]; label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; label.add_theme_font_size_override("font_size", 17); label.add_theme_color_override("font_color", Color("3b2418")); row.add_child(label)
+        var label := Label.new()
+        var ingredients := []
+        for ingredient in recipe.ingredients:
+            ingredients.append("%s L%s" % [_display_gem_name(ingredient["id"]), ingredient.get("level", 1)])
+        label.text = "%s = %s\n%s" % [_display_gem_name(recipe.result_id), " + ".join(ingredients), _display_gem_name(recipe.id)]
+        label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; label.add_theme_font_size_override("font_size", 14); label.add_theme_color_override("font_color", Color("3b2418")); row.add_child(label)
         shown += 1
     if shown == 0:
         var empty := Label.new(); empty.text = LocalizationService.tr_key("game.help.empty"); empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; empty.add_theme_color_override("font_color", Color("6d4a32")); empty.custom_minimum_size = Vector2(0, 72); empty.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; recipe_rows.add_child(empty)
@@ -904,8 +984,8 @@ func _toggle_help() -> void:
     var detail_title := Label.new(); detail_title.add_theme_font_size_override("font_size", 22); detail_title.add_theme_color_override("font_color", Color("3b2418")); detail_column.add_child(detail_title)
     var detail_separator := HSeparator.new(); detail_separator.add_theme_stylebox_override("separator", _parchment_separator_style()); detail_column.add_child(detail_separator)
     var detail_label := Label.new(); detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; detail_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP; detail_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; detail_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN; detail_label.add_theme_font_size_override("font_size", 17); detail_label.add_theme_color_override("font_color", Color("503522")); detail_column.add_child(detail_label)
-    var action_label_keys := ["game.command.place_gem", "game.command.select_gem", "game.command.combine", "game.command.degrade", "game.command.remove_stone", "game.command.keep_gem", "game.command.restart"]
-    var action_detail_keys := ["game.help.place", "game.help.select", "game.help.combine", "game.help.degrade", "game.help.remove_stone", "game.help.keep", "game.help.restart"]
+    var action_label_keys := ["game.command.place_gem", "game.command.select_gem", "game.command.combine", "game.command.degrade", "game.command.remove_stone", "game.command.keep_gem"]
+    var action_detail_keys := ["game.help.place", "game.help.select", "game.help.combine", "game.help.degrade", "game.help.remove_stone", "game.help.keep"]
     var action_group := ButtonGroup.new()
     for index in action_label_keys.size():
         var detail_key: String = action_detail_keys[index]
@@ -916,7 +996,7 @@ func _toggle_help() -> void:
     var shortcuts := ScrollContainer.new(); shortcuts.name = LocalizationService.tr_key("game.help.shortcuts"); shortcuts.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; tabs.add_child(shortcuts); _style_modal_scrollbar(shortcuts.get_v_scroll_bar())
     var shortcut_margin := MarginContainer.new(); shortcut_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL; shortcut_margin.add_theme_constant_override("margin_left", 10); shortcut_margin.add_theme_constant_override("margin_top", 10); shortcut_margin.add_theme_constant_override("margin_right", 10); shortcut_margin.add_theme_constant_override("margin_bottom", 10); shortcuts.add_child(shortcut_margin)
     var shortcut_column := VBoxContainer.new(); shortcut_column.add_theme_constant_override("separation", 7); shortcut_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL; shortcut_margin.add_child(shortcut_column)
-    var shortcut_data := [["E", "game.command.combine"], ["R", "game.command.degrade"], ["A", "game.command.remove_stone"], ["F", "game.command.recipes"], ["Z", "game.command.keep_gem"], ["V", "game.command.restart"], ["P", "game.command.recipes"], ["Esc", "game.help.shortcut_escape"], ["F10", "game.command.debug"]]
+    var shortcut_data := [["Q", "game.command.place_gem"], ["E", "game.command.combine"], ["R", "game.command.degrade"], ["A", "game.command.remove_stone"], ["Z", "game.command.keep_gem"], ["P", "game.command.recipes"], ["Esc", "game.help.shortcut_escape"], ["F10", "game.command.debug"]]
     for entry in shortcut_data:
         var shortcut_panel := PanelContainer.new(); shortcut_panel.add_theme_stylebox_override("panel", _settings_row_style()); shortcut_column.add_child(shortcut_panel)
         var row_margin := MarginContainer.new(); row_margin.add_theme_constant_override("margin_left", 10); row_margin.add_theme_constant_override("margin_top", 5); row_margin.add_theme_constant_override("margin_right", 12); row_margin.add_theme_constant_override("margin_bottom", 5); shortcut_panel.add_child(row_margin)
@@ -1113,7 +1193,55 @@ func _refresh_ui() -> void:
         if is_instance_valid(_life_fill_style): _life_fill_style.bg_color = _life_bar_color(target / life_bar.max_value)
     if is_instance_valid(life_value_label): life_value_label.text = "%d/%d" % [runtime.player_state.lives, runtime.player_state.max_lives]
     if is_instance_valid(gold_value_label): gold_value_label.text = str(runtime.player_state.gold)
-    inspector_label.text = _selection_summary()
+    _refresh_inspector_content()
+    if is_instance_valid(inspector_panel): inspector_panel.visible = not selection.is_empty()
+    if is_instance_valid(inspector_icon):
+        inspector_icon.texture = null
+        if selection.kind == SelectionState.Kind.GEM:
+            var selected_gem: GemInstance = selection.value
+            inspector_icon.texture = _gem_texture(selected_gem.id, selected_gem.level)
+        elif selection.kind == SelectionState.Kind.TOWER:
+            var selected_tower: TowerRuntime = selection.value
+            inspector_icon.texture = _gem_texture(selected_tower.id, selected_tower.gem.level if selected_tower.gem != null else 1)
+        elif selection.kind == SelectionState.Kind.ENEMY:
+            inspector_icon.texture = _enemy_icon_texture()
+        elif selection.kind == SelectionState.Kind.STONE:
+            inspector_icon.texture = _stone_icon_texture()
+
+func _enemy_icon_texture() -> Texture2D:
+    var atlas := AtlasTexture.new()
+    atlas.atlas = load("res://assets/art/gameplay/enemies/pipo_nekonin027.png") as Texture2D
+    atlas.region = Rect2(0, 0, 32, 32)
+    return atlas
+
+func _stone_icon_texture() -> Texture2D:
+    return load("res://assets/art/gameplay/environment/stones/stone_01.png") as Texture2D
+
+func _refresh_inspector_content() -> void:
+    if not is_instance_valid(inspector_name_label) or not is_instance_valid(inspector_stats_label): return
+    inspector_name_label.text = ""
+    inspector_stats_label.text = ""
+    if selection.is_empty(): return
+    if selection.kind == SelectionState.Kind.GEM:
+        inspector_title_label.text = "Torre seleccionada" if LocalizationService.locale == "es" else "Selected tower"
+        var gem: GemInstance = selection.value
+        var definition := runtime.foundation.catalog.gem_definition_for_id(gem.id) as GemDefinition
+        var stats := TowerCombatStats.from_gem(gem, definition)
+        inspector_name_label.text = "[b]%s[/b]" % (_quality_label(gem.quality) + " " + _display_gem_name(gem.id))
+        inspector_stats_label.text = "• Nivel: %d\n• Damage: %.1f\n• Range: %.1f\n• Attack Speed: %.1f" % [gem.level, stats.damage, stats.range_units, stats.total_attack_speed()]
+    elif selection.kind == SelectionState.Kind.TOWER:
+        inspector_title_label.text = "Torre seleccionada" if LocalizationService.locale == "es" else "Selected tower"
+        var tower: TowerRuntime = selection.value
+        inspector_name_label.text = "[b]%s[/b]" % _display_gem_name(tower.id)
+        inspector_stats_label.text = "• Nivel: %d\n• Damage: %.1f\n• Range: %.1f\n• Attack Speed: %.1f" % [tower.gem.level if tower.gem != null else 1, tower.stats.damage, tower.stats.range_units, tower.stats.total_attack_speed()]
+    elif selection.kind == SelectionState.Kind.ENEMY:
+        inspector_title_label.text = "Enemigo seleccionado" if LocalizationService.locale == "es" else "Selected enemy"
+        var enemy: EnemyRuntime = selection.value
+        inspector_name_label.text = "[b]%s[/b]" % enemy.profile_id
+        inspector_stats_label.text = "• HP: %.1f / %.1f\n• Armor: %.1f\n• Magic: %.1f" % [enemy.hp, enemy.max_hp, enemy.armor, enemy.magic_resistance]
+    else:
+        inspector_title_label.text = "Piedra seleccionada" if LocalizationService.locale == "es" else "Selected stone"
+        inspector_name_label.text = "[b]%s[/b]" % LocalizationService.tr_key("game.selection.stone")
     if is_instance_valid(feedback_label): feedback_label.text = LocalizationService.tr_key(feedback_key)
     if is_instance_valid(help_button): help_button.text = LocalizationService.tr_key("game.help.title")
 
@@ -1121,7 +1249,9 @@ func _selection_summary() -> String:
     if selection.is_empty(): return LocalizationService.tr_key("game.selection.none")
     if selection.kind == SelectionState.Kind.GEM:
         var gem: GemInstance = selection.value
-        return LocalizationService.tr_key("game.selection.gem", {"id": _display_gem_name(gem.id), "level": gem.level, "quality": _quality_label(gem.quality), "cell": gem.cell})
+        var definition := runtime.foundation.catalog.gem_definition_for_id(gem.id) as GemDefinition
+        var stats := TowerCombatStats.from_gem(gem, definition)
+        return "%s %s (Level %d)\nDamage: %.1f\nRange: %.1f\nAttack Speed: %.1f" % [_quality_label(gem.quality), _display_gem_name(gem.id), gem.level, stats.damage, stats.range_units, stats.total_attack_speed()]
     if selection.kind == SelectionState.Kind.ENEMY:
         var enemy: EnemyRuntime = selection.value
         return LocalizationService.tr_key("game.selection.enemy", {"id": enemy.profile_id, "hp": snapped(enemy.hp, 0.1), "max_hp": snapped(enemy.max_hp, 0.1), "armor": enemy.armor, "magic": enemy.magic_resistance})
@@ -1154,6 +1284,13 @@ func _inner_panel() -> StyleBoxFlat:
     panel.content_margin_right = 10
     panel.content_margin_bottom = 8
     return panel
+
+func _strong_section_separator() -> StyleBoxFlat:
+    var separator := StyleBoxFlat.new()
+    separator.bg_color = Color("d9b27b")
+    separator.content_margin_top = 2
+    separator.content_margin_bottom = 2
+    return separator
 
 func _map_frame() -> StyleBoxFlat:
     var panel := StyleBoxFlat.new()
@@ -1367,6 +1504,20 @@ class MapDebugView extends Control:
         placement_preview.size = Vector2.ONE * target_size
         placement_preview.position = board_origin + map_pan + ((Vector2(hover_cell) + Vector2.ONE * 0.5) * scale_value * map_zoom) - Vector2.ONE * target_size * 0.5
         placement_preview.modulate = Color(1.0, 1.0, 1.0, 0.82) if hover_can_place else Color(1.0, 0.35, 0.35, 0.45)
+
+    func place_gem_at_hover() -> void:
+        if runtime == null or runtime.phases.phase != GamePhaseMachine.Phase.CONSTRUCTION:
+            return
+        if hover_cell.x < 0 or not _can_preview_placement(hover_cell):
+            view._set_feedback("game.feedback.invalid_action")
+            return
+        var placed := runtime.construction.place_gem(hover_cell, int(runtime.player_state.player_level))
+        if placed == null:
+            view._set_feedback("game.feedback.invalid_action")
+            return
+        view.selection.clear()
+        hover_can_place = false
+        view._set_map_cursor(false)
     func _gui_input(event: InputEvent) -> void:
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
             map_zoom = clampf(map_zoom + 0.1, 0.65, 2.5); _center_zoom(); _clamp_pan(); queue_redraw(); sync_gem_sprites(); return
@@ -1389,15 +1540,19 @@ class MapDebugView extends Control:
                 var gem := runtime.construction.gem_at_cell(cell)
                 if gem != null: view.selection.select(SelectionState.Kind.GEM, gem); runtime.construction.select_board_gem(cell)
                 elif runtime.construction.stones.has(cell): view.selection.select(SelectionState.Kind.STONE, cell); runtime.construction.select_stone(cell)
-                else: runtime.construction.place_gem(cell, int(runtime.player_state.player_level))
+                else: view.selection.clear()
                 hover_can_place = _can_preview_placement(cell)
                 view._set_map_cursor(hover_can_place)
             else:
+                var clicked_entity := false
+                if runtime.construction.stones.has(cell):
+                    view.selection.select(SelectionState.Kind.STONE, cell); runtime.construction.select_stone(cell); clicked_entity = true
                 for tower in runtime.combat.towers:
                     if tower.position.distance_to(Vector2(cell) * 100.0 + Vector2.ONE * 50.0) < 80.0:
-                        view.selection.select(SelectionState.Kind.TOWER, tower); queue_redraw(); return
+                        view.selection.select(SelectionState.Kind.TOWER, tower); clicked_entity = true; queue_redraw(); return
                 for enemy in runtime.combat.enemies:
-                    if enemy.is_alive() and enemy.position.distance_to(Vector2(cell) * 100.0 + Vector2.ONE * 50.0) < 80.0: view.selection.select(SelectionState.Kind.ENEMY, enemy); break
+                    if enemy.is_alive() and enemy.position.distance_to(Vector2(cell) * 100.0 + Vector2.ONE * 50.0) < 80.0: view.selection.select(SelectionState.Kind.ENEMY, enemy); clicked_entity = true; break
+                if not clicked_entity: view.selection.clear()
             queue_redraw()
     func _cell_at(position: Vector2) -> Vector2i:
         var scale_value := minf(size.x, size.y) / 36.0
@@ -1416,9 +1571,7 @@ class MapDebugView extends Control:
         var board_size := minf(size.x, size.y)
         map_pan = Vector2((board_size - board_size * map_zoom) * 0.5, (board_size - board_size * map_zoom) * 0.5)
     func _can_preview_placement(cell: Vector2i) -> bool:
-        if runtime == null or not runtime.construction.can_place(): return false
-        if not runtime.grid.is_in_bounds(cell) or runtime.grid.is_reserved(cell) or not runtime.grid.is_walkable(cell): return false
-        return runtime.construction.pathfinder.can_occupy_without_blocking(cell, runtime.map)
+        return runtime != null and runtime.construction.can_place_at(cell)
     func _draw() -> void:
         if runtime == null: return
         var board_size := minf(size.x, size.y)
@@ -1560,6 +1713,8 @@ class MapTerrainLayer extends Control:
                 if route_cells.has(str(cell)):
                     var selected_id := _road_tile(cell)
                     tile.texture = field_textures.get(selected_id, tile.texture)
+                if runtime != null and runtime.grid != null and runtime.grid.is_restricted(cell):
+                    tile.modulate = Color(0.90, 0.90, 0.84, 1.0)
                 add_child(tile)
                 tile_nodes.append(tile)
 

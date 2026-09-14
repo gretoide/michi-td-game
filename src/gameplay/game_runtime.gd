@@ -39,6 +39,7 @@ func initialize(seed: int = -1) -> PackedStringArray:
 	if not map_errors.is_empty(): return map_errors
 	for waypoint: Vector2i in map.ordered_waypoints(): grid.reserve(waypoint)
 	_block_outer_border()
+	_block_restricted_zones()
 	foundation = GameplayFoundation.new()
 	var loaded := foundation.initialize(seed)
 	if not loaded.is_valid():
@@ -48,6 +49,7 @@ func initialize(seed: int = -1) -> PackedStringArray:
 	pathfinder = GroundPathfinder.new(grid)
 	if pathfinder.find_route(map).is_empty(): return PackedStringArray(["Initial Ground route is invalid"])
 	phases = GamePhaseMachine.new(); phases.reset()
+	phases.phase_exited.connect(_on_phase_exited)
 	wave = WaveRuntime.new()
 	gem_generator = GemGenerator.new(foundation.random)
 	mvp = MvpState.new()
@@ -69,6 +71,7 @@ func initialize(seed: int = -1) -> PackedStringArray:
 	wave_definitions = _build_wave_definitions()
 	wave.enemy_spawned.connect(_on_wave_enemy_spawned)
 	construction.construction_finalized.connect(_on_construction_finalized)
+	construction.navigation_changed.connect(_on_navigation_changed)
 	player_state = {"wave": 1, "lives": 1000, "max_lives": 1000, "score": 0, "gold": 0, "xp": 0, "player_level": 1, "progress": 50.0, "base_enemy_count": 10, "support_skills": {}}
 	progress.changed.connect(func(value: float): player_state.progress = value)
 	economy.changed.connect(func(value: int): player_state.gold = value)
@@ -85,6 +88,14 @@ func _block_outer_border() -> void:
 	for y in range(1, GridModel.HEIGHT - 1):
 		grid.block(Vector2i(0, y))
 		grid.block(Vector2i(GridModel.WIDTH - 1, y))
+
+func _block_restricted_zones() -> void:
+	# Fixed V1 spawn/end areas. They are tracked separately from walkability so
+	# the route can still traverse its special spawn and endpoint cells.
+	for y in range(1, 8):
+		for x in range(1, 11): grid.restrict(Vector2i(x, y))
+	for y in range(27, GridModel.HEIGHT):
+		for x in range(28, GridModel.WIDTH): grid.restrict(Vector2i(x, y))
 
 func start_first_wave() -> bool:
 	if wave == null or wave.is_active(): return false
@@ -131,6 +142,16 @@ func _sync_combat_towers() -> void:
 	for gem: GemInstance in construction.board_gems:
 		var definition := foundation.catalog.gem_definition_for_id(gem.id) as GemDefinition
 		var tower := TowerRuntime.new(); tower.setup(gem, definition, Vector2(gem.cell) * 100.0 + Vector2.ONE * 50.0); combat.add_tower(tower)
+
+func _on_navigation_changed() -> void:
+	if pathfinder == null or combat == null or map == null: return
+	var refreshed := pathfinder.find_route(map)
+	if refreshed.is_empty(): return
+	combat.refresh_enemy_paths(refreshed)
+
+func _on_phase_exited(previous_phase: GamePhaseMachine.Phase) -> void:
+	if previous_phase == GamePhaseMachine.Phase.COMBAT and combat != null:
+		combat.clear_projectiles()
 
 func _on_construction_finalized(_result: GemInstance) -> void:
 	_sync_combat_towers()

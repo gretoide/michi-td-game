@@ -38,6 +38,7 @@ var verification_email := ""
 var verification_password := ""
 var register_mode := true
 var home_music: AudioStreamPlayer
+var combat_music: AudioStreamPlayer
 var music_toggle_button: Button
 var locale_selector: LocaleSelector
 var global_controls_layer: Control
@@ -72,6 +73,32 @@ func _start_home_music() -> void:
         AudioServer.add_bus()
         AudioServer.set_bus_name(AudioServer.bus_count - 1, "Music")
     stream.loop = true; home_music = AudioStreamPlayer.new(); home_music.stream = stream; home_music.bus = "Music"; home_music.volume_db = -16.0; add_child(home_music); home_music.play(); settings_store._apply_audio(); _update_music_toggle()
+
+func _start_combat_music() -> void:
+    var stream := load("res://assets/audio/combat/low_level_fight_dnd_battle_music.mp3") as AudioStreamMP3
+    if stream == null: return
+    if AudioServer.get_bus_index("Music") < 0:
+        AudioServer.add_bus()
+        AudioServer.set_bus_name(AudioServer.bus_count - 1, "Music")
+    if is_instance_valid(home_music): home_music.stop()
+    if not is_instance_valid(combat_music):
+        combat_music = AudioStreamPlayer.new()
+        add_child(combat_music)
+    stream.loop = true
+    combat_music.stream = stream
+    combat_music.bus = "Music"
+    combat_music.volume_db = -16.0
+    combat_music.play()
+
+func _stop_combat_music() -> void:
+    if is_instance_valid(combat_music): combat_music.stop()
+    if is_instance_valid(home_music) and not home_music.playing: home_music.play()
+
+func _on_game_phase_entered(phase: int) -> void:
+    if phase == GamePhaseMachine.Phase.COMBAT:
+        _start_combat_music()
+    else:
+        _stop_combat_music()
 
 func _build_ui() -> void:
     var background := ColorRect.new(); background.color = Color("0e1524"); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(background)
@@ -283,6 +310,7 @@ func _start_new_game() -> void:
         _show_landing()
         _on_auth_failed(LocalizationService.tr_key("error.game_start", {"detail": "; ".join(errors)}))
         return
+    game_runtime.phases.phase_entered.connect(_on_game_phase_entered)
     access_state = AccessState.AUTHENTICATED_HOME
     # The gameplay HUD owns pause and locale controls. Keep the auth shell's
     # global controls hidden so selectors are never rendered twice.
@@ -294,12 +322,14 @@ func _start_new_game() -> void:
     gameplay_view = GameplayView.new(); add_child(gameplay_view); gameplay_view.main_menu_requested.connect(_on_gameplay_main_menu_requested); gameplay_view.logout_requested.connect(_on_gameplay_logout_requested); gameplay_view.exit_requested.connect(_on_gameplay_exit_requested); gameplay_view.setup(game_runtime, settings_store)
 
 func _on_gameplay_main_menu_requested() -> void:
+    _stop_combat_music()
     if is_instance_valid(gameplay_view): gameplay_view.hide(); gameplay_view.queue_free()
     gameplay_view = null
     game_runtime = null
     _show_welcome(str(SessionStore.user.get("alias", "jugador")))
 
 func _on_gameplay_logout_requested() -> void:
+    _stop_combat_music()
     if is_instance_valid(gameplay_view): gameplay_view.hide(); gameplay_view.queue_free()
     gameplay_view = null
     game_runtime = null

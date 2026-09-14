@@ -16,6 +16,19 @@ var spawn_counter := 0
 func setup(value_projectile_speed := 1000.0, value_path: Array[Vector2i] = []) -> void:
 	projectile_speed = value_projectile_speed; path_cells = value_path
 
+func refresh_enemy_paths(value_path: Array[Vector2i]) -> void:
+	if value_path.is_empty(): return
+	path_cells = value_path.duplicate()
+	for enemy: EnemyRuntime in enemies:
+		if enemy != null and enemy.is_alive(): enemy.refresh_path(path_cells)
+
+func clear_projectiles() -> void:
+	if projectiles.is_empty(): return
+	for projectile: HomingProjectile in projectiles:
+		if projectile != null: projectile.active = false
+	projectiles.clear()
+	combat_changed.emit()
+
 func add_tower(tower: TowerRuntime) -> void:
 	if tower == null: return
 	towers.append(tower)

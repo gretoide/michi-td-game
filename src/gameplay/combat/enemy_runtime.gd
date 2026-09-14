@@ -24,6 +24,7 @@ var movement_speed := 250.0
 var path: Array[Vector2] = []
 var path_index := 0
 var checkpoint_cells: Array[Vector2i] = []
+var reached_checkpoint_indices := {}
 var rush_remaining := 0.0
 var recharge_accumulator := 0.0
 var evasion_chance := 0.0
@@ -78,6 +79,20 @@ func set_path(cells: Array[Vector2i]) -> void:
 	path_index = 0
 	if not path.is_empty(): position = path[0]
 
+func refresh_path(cells: Array[Vector2i]) -> void:
+	var rebuilt: Array[Vector2] = []
+	for cell in cells: rebuilt.append(Vector2(cell) * 100.0 + Vector2.ONE * 50.0)
+	if rebuilt.is_empty(): return
+	var closest := 0
+	var closest_distance := INF
+	for index in range(rebuilt.size()):
+		var distance := position.distance_squared_to(rebuilt[index])
+		if distance < closest_distance:
+			closest_distance = distance
+			closest = index
+	path = rebuilt
+	path_index = closest
+
 func move_along_path(delta: float) -> void:
 	if not is_alive() or path_index >= path.size() - 1: return
 	position = position.move_toward(path[path_index + 1], effective_move_speed() * delta)
@@ -86,8 +101,9 @@ func move_along_path(delta: float) -> void:
 		if path_index < path.size() - 1:
 			var reached_cell := Vector2i(floori(path[path_index].x / 100.0), floori(path[path_index].y / 100.0))
 			var checkpoint_index := checkpoint_cells.find(reached_cell)
-			if checkpoint_index >= 0: checkpoint_reached.emit(checkpoint_index)
+			if checkpoint_index >= 0 and not reached_checkpoint_indices.has(checkpoint_index):
+				reached_checkpoint_indices[checkpoint_index] = true; checkpoint_reached.emit(checkpoint_index)
 		else: reached_path_end.emit()
 
 func set_checkpoint_cells(value: Array[Vector2i]) -> void:
-	checkpoint_cells = value.duplicate()
+	checkpoint_cells = value.duplicate(); reached_checkpoint_indices.clear()
