@@ -18,6 +18,7 @@ La foundation de gameplay usa catálogos tipados `.tres` en `data/gameplay`. Par
 godot --headless --path . --script res://test/foundation/run.gd
 godot --headless --path . --script res://test/gameplay/m1/run.gd
 godot --headless --path . --script res://test/gameplay/m2/run.gd
+godot --headless --path . --script res://test/gameplay/m3/run.gd
 ```
 
 ## Validar y exportar

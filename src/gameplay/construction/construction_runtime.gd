@@ -7,6 +7,8 @@ signal construction_changed(placed_count: int, total: int)
 signal stone_created(stone: StoneInstance)
 signal construction_finalized(result: GemInstance)
 signal combination_completed(recipe_id: StringName, result: GemInstance)
+signal selection_changed(gem: GemInstance)
+signal gem_pool_changed
 
 const MAX_PLACEMENTS := 5
 var grid: GridModel
@@ -18,9 +20,12 @@ var recipes: Array = []
 var matcher := RecipeMatcher.new()
 var mvp := MvpState.new()
 var current_gems: Array[GemInstance] = []
+var available_gems: Array[GemInstance] = []
+var selected_gem: GemInstance
 var board_gems: Array[GemInstance] = []
 var stones: Dictionary = {}
 var selected_result: GemInstance
+var selected_board_gem: GemInstance
 var round_id := 1
 
 func setup(value_grid: GridModel, value_pathfinder: GroundPathfinder, value_phases: GamePhaseMachine, value_generator: GemGenerator, value_recipes: Array = [], value_map: MapLayout = null) -> void:
@@ -30,12 +35,53 @@ func setup(value_grid: GridModel, value_pathfinder: GroundPathfinder, value_phas
 
 func begin_round(value := 1) -> void:
 	round_id = value
-	current_gems.clear(); selected_result = null
+	current_gems.clear(); available_gems.clear(); selected_gem = null; selected_board_gem = null; selected_result = null
 	if generator != null: generator.reset_round(round_id)
 	construction_changed.emit(0, MAX_PLACEMENTS)
+	gem_pool_changed.emit()
+
+func ensure_gem_pool(player_level := 1) -> void:
+	if generator == null or not available_gems.is_empty(): return
+	for _i in range(MAX_PLACEMENTS):
+		var gem := generator.generate(player_level)
+		if gem != null: available_gems.append(gem)
+	if not available_gems.is_empty():
+		selected_gem = available_gems[0]
+	gem_pool_changed.emit()
+
+func select_available(index: int) -> GemInstance:
+	if index < 0 or index >= available_gems.size(): return null
+	selected_gem = available_gems[index]
+	gem_pool_changed.emit()
+	return selected_gem
+
+func place_selected(cell: Vector2i) -> GemInstance:
+	if selected_gem == null:
+		placement_rejected.emit(&"no_gem_selected", cell); return null
+	var gem := selected_gem
+	var placed := _place_existing(gem, cell)
+	if placed != null:
+		available_gems.erase(gem)
+		selected_gem = available_gems[0] if not available_gems.is_empty() else null
+		gem_pool_changed.emit()
+	return placed
 
 func placed_count() -> int:
 	return current_gems.size()
+
+func gem_at_cell(cell: Vector2i) -> GemInstance:
+	for gem: GemInstance in current_gems:
+		if gem.cell == cell: return gem
+	return null
+
+func select_board_gem(cell: Vector2i) -> GemInstance:
+	if phases == null or phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or placed_count() != MAX_PLACEMENTS:
+		return null
+	var gem := gem_at_cell(cell)
+	if gem == null: return null
+	selected_board_gem = gem
+	selection_changed.emit(gem)
+	return gem
 
 func can_place() -> bool:
 	return phases != null and phases.phase == GamePhaseMachine.Phase.CONSTRUCTION and placed_count() < MAX_PLACEMENTS
@@ -86,6 +132,7 @@ func _placement_error(cell: Vector2i) -> StringName:
 func keep(gem: GemInstance) -> bool:
 	if gem == null or gem not in current_gems or placed_count() != MAX_PLACEMENTS:
 		return false
+	selected_board_gem = gem
 	return _finalize_current(gem)
 
 func remove_stone(cell: Vector2i) -> bool:
@@ -120,6 +167,7 @@ func basic_combinations() -> Array:
 
 func combine_basic(selected: GemInstance, count: int) -> GemInstance:
 	if selected == null or placed_count() != MAX_PLACEMENTS or count not in [2, 4]: return null
+	selected_board_gem = selected
 	var candidates: Array = []
 	for gem in current_gems:
 		if gem.id == selected.id and gem.level == selected.level: candidates.append(gem)

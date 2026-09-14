@@ -4,19 +4,19 @@ extends Control
 var runtime: GameRuntime
 var phase_label: Label
 var wave_label: Label
+var combat_label: Label
 
 func setup(value: GameRuntime) -> void:
 	runtime = value
+	set_process(true)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var background := ColorRect.new(); background.color = Color("152238"); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(background)
 	var map_view := MapDebugView.new(); map_view.runtime = runtime; map_view.set_anchors_preset(Control.PRESET_FULL_RECT); map_view.offset_left = 40; map_view.offset_top = 70; map_view.offset_right = -340; map_view.offset_bottom = -70; background.add_child(map_view)
-	_add_gameplay_sprite(background, "res://assets/art/gameplay/tower_05.png", Vector2(64, 128), Vector2(64, 128), Vector2(140, 300))
-	_add_gameplay_sprite(background, "res://assets/art/gameplay/tower_05.png", Vector2(64, 128), Vector2(64, 128), Vector2(270, 300))
-	_add_gameplay_sprite(background, "res://assets/art/gameplay/orc_idle.png", Vector2(100, 100), Vector2(100, 100), Vector2(560, 220))
 	var hud := PanelContainer.new(); hud.set_anchors_preset(Control.PRESET_TOP_WIDE); hud.offset_left = 20; hud.offset_top = 12; hud.offset_right = -20; hud.offset_bottom = 64; hud.add_theme_stylebox_override("panel", _hud_panel()); background.add_child(hud)
 	var hud_row := HBoxContainer.new(); hud_row.add_theme_constant_override("separation", 14); hud.add_child(hud_row)
 	phase_label = Label.new(); phase_label.text = LocalizationService.tr_key("game.phase.construction"); phase_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hud_row.add_child(phase_label)
 	wave_label = Label.new(); wave_label.text = LocalizationService.tr_key("game.wave", {"number": 1}); hud_row.add_child(wave_label)
+	combat_label = Label.new(); hud_row.add_child(combat_label)
 	var locale := LocaleSelector.new(); locale.custom_minimum_size = Vector2(100,38); locale.setup()
 	hud_row.add_child(locale)
 	var pause := Button.new(); pause.custom_minimum_size = Vector2(42,38); pause.text = "Ⅱ"; pause.tooltip_text = LocalizationService.tr_key("game.pause"); pause.pressed.connect(func(): get_tree().paused = not get_tree().paused); pause.process_mode = Node.PROCESS_MODE_ALWAYS; hud_row.add_child(pause)
@@ -24,8 +24,16 @@ func setup(value: GameRuntime) -> void:
 	runtime.construction.gem_placed.connect(func(_gem: GemInstance): map_view.queue_redraw())
 	runtime.construction.stone_created.connect(func(_stone: StoneInstance): map_view.queue_redraw())
 	runtime.construction.construction_changed.connect(func(_count: int, _total: int): map_view.queue_redraw())
+	runtime.combat.combat_changed.connect(func(): map_view.queue_redraw())
+	runtime.combat.combat_changed.connect(func(): _refresh_combat_label())
 	runtime.phases.phase_entered.connect(_on_phase)
-	LocalizationService.locale_changed.connect(func(_locale: String): _on_phase(runtime.phases.phase))
+	LocalizationService.locale_changed.connect(func(_locale: String): _on_phase(runtime.phases.phase); _refresh_combat_label())
+	_refresh_combat_label()
+
+func _process(delta: float) -> void:
+	if runtime != null:
+		runtime.tick(delta)
+		queue_redraw()
 
 func _hud_panel() -> StyleBoxTexture:
 	var panel := StyleBoxTexture.new()
@@ -43,8 +51,13 @@ func _on_phase(value: GamePhaseMachine.Phase) -> void:
 	phase_label.text = LocalizationService.tr_key("game.phase.construction" if value == GamePhaseMachine.Phase.CONSTRUCTION else "game.phase.combat")
 	wave_label.text = LocalizationService.tr_key("game.wave", {"number": runtime.phases.wave_number})
 
+func _refresh_combat_label() -> void:
+	if combat_label == null or runtime == null or runtime.combat == null: return
+	combat_label.text = LocalizationService.tr_key("game.combat.summary", {"towers": runtime.combat.towers.size(), "enemies": runtime.combat.enemies.size(), "projectiles": runtime.combat.projectiles.size()})
+
 class MapDebugView extends Control:
 	var runtime: GameRuntime
+	const ENEMY_TEXTURE := preload("res://assets/art/gameplay/orc_idle.png")
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 
@@ -52,7 +65,10 @@ class MapDebugView extends Control:
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and runtime != null:
 			var scale_value := minf(get_rect().size.x, get_rect().size.y) / 36.0
 			var cell := Vector2i(floori(event.position.x / scale_value), floori(event.position.y / scale_value))
-			runtime.construction.place_gem(cell, int(runtime.player_state.player_level))
+			if runtime.construction.gem_at_cell(cell) != null:
+				runtime.construction.select_board_gem(cell)
+			else:
+				runtime.construction.place_gem(cell, int(runtime.player_state.player_level))
 			queue_redraw()
 
 	func _draw() -> void:
@@ -69,10 +85,21 @@ class MapDebugView extends Control:
 			var gem_point := (Vector2(gem.cell) + Vector2.ONE * 0.5) * scale_value
 			draw_circle(gem_point, 9.0, _gem_color(gem))
 			draw_circle(gem_point, 11.0, Color(1, 1, 1, 0.8), false, 2.0)
+			if gem == runtime.construction.selected_board_gem:
+				draw_circle(gem_point, 15.0, Color("fff1a8"), false, 3.0)
 		for cell: Vector2i in runtime.construction.stones:
 			var stone_point := (Vector2(cell) + Vector2.ONE * 0.5) * scale_value
 			draw_circle(stone_point, 8.0, Color("8b8f9a"))
 			draw_circle(stone_point, 10.0, Color(0.2, 0.2, 0.25, 0.9), false, 2.0)
+		if runtime.combat != null:
+			for enemy: EnemyRuntime in runtime.combat.enemies:
+				if enemy.is_alive():
+					var enemy_point := enemy.position / 100.0 * scale_value
+					draw_texture_rect_region(ENEMY_TEXTURE, Rect2(enemy_point - Vector2.ONE * 24.0, Vector2.ONE * 48.0), Rect2(0, 0, 128, 128))
+					draw_rect(Rect2(enemy_point + Vector2(-18.0, 20.0), Vector2(36.0, 4.0)), Color("3a1820"))
+					draw_rect(Rect2(enemy_point + Vector2(-18.0, 20.0), Vector2(36.0 * enemy.hp / enemy.max_hp, 4.0)), Color("e66b6b"))
+			for projectile: HomingProjectile in runtime.combat.projectiles:
+				draw_circle(projectile.position / 100.0 * scale_value, 4.0, Color("fff1a8"))
 
 	func _gem_color(gem: GemInstance) -> Color:
 		var colors := {&"amethyst": Color("b78cff"), &"aquamarine": Color("68d8e8"), &"diamond": Color("e9f6ff"), &"emerald": Color("55d889"), &"opal": Color("f3a7d8"), &"ruby": Color("ef6262"), &"sapphire": Color("6598ff"), &"topaz": Color("f4c95d")}

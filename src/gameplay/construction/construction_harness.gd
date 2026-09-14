@@ -6,7 +6,7 @@ var status_label: Label
 var x_input: SpinBox
 var y_input: SpinBox
 var place_button: Button
-var keep_button: Button
+var select_button: Button
 var combine_button: Button
 var remove_button: Button
 var degrade_button: Button
@@ -26,7 +26,7 @@ func setup(value: GameRuntime) -> void:
 	var coordinates := HBoxContainer.new(); column.add_child(coordinates)
 	x_input = _spin("X", coordinates); y_input = _spin("Y", coordinates)
 	place_button = _button("", _place); column.add_child(place_button)
-	keep_button = _button("", _keep); column.add_child(keep_button)
+	select_button = _button("", _select_final); column.add_child(select_button)
 	combine_button = _button("", _combine); column.add_child(combine_button)
 	degrade_button = _button("", _degrade); column.add_child(degrade_button)
 	remove_button = _button("", _remove); column.add_child(remove_button)
@@ -36,6 +36,7 @@ func setup(value: GameRuntime) -> void:
 	runtime.construction.stone_created.connect(func(_stone: StoneInstance): _refresh())
 	runtime.construction.placement_rejected.connect(func(code: StringName, _cell: Vector2i): last_feedback = "Rejected: %s" % code; _refresh())
 	runtime.construction.construction_finalized.connect(func(_result: GemInstance): last_feedback = "Construction finalized"; _refresh())
+	runtime.construction.selection_changed.connect(func(_gem: GemInstance): _refresh())
 	LocalizationService.locale_changed.connect(func(_locale: String): _refresh())
 	_refresh()
 
@@ -51,12 +52,21 @@ func _cell() -> Vector2i:
 func _place() -> void:
 	runtime.construction.place_gem(_cell(), int(runtime.player_state.player_level)); _refresh()
 
-func _keep() -> void:
-	if not runtime.construction.current_gems.is_empty(): runtime.construction.keep(runtime.construction.current_gems[0]); _refresh()
+func _select_final() -> void:
+	if runtime.construction.selected_board_gem != null:
+		runtime.construction.keep(runtime.construction.selected_board_gem)
+	else:
+		last_feedback = "Rejected: select_gem"
+	_refresh()
 
 func _combine() -> void:
 	var options := runtime.construction.basic_combinations()
-	if not options.is_empty(): runtime.construction.combine_basic(options[0].gems[0], int(options[0].count)); _refresh()
+	if runtime.construction.selected_board_gem == null:
+		last_feedback = "Rejected: select_gem"; _refresh(); return
+	for option in options:
+		if runtime.construction.selected_board_gem in option.gems:
+			runtime.construction.combine_basic(runtime.construction.selected_board_gem, int(option.count)); _refresh(); return
+	last_feedback = "Rejected: no_combination"; _refresh()
 
 func _degrade() -> void:
 	if not runtime.construction.current_gems.is_empty(): runtime.construction.degrade(runtime.construction.current_gems[0]); _refresh()
@@ -75,12 +85,12 @@ func _refresh() -> void:
 	var title := get_node_or_null("VBoxContainer/Title") as Label
 	if title != null: title.text = LocalizationService.tr_key("game.harness.title")
 	place_button.text = LocalizationService.tr_key("game.harness.place")
-	keep_button.text = LocalizationService.tr_key("game.harness.keep")
+	select_button.text = LocalizationService.tr_key("game.harness.select")
 	combine_button.text = LocalizationService.tr_key("game.harness.combine")
 	degrade_button.text = LocalizationService.tr_key("game.harness.degrade")
 	remove_button.text = LocalizationService.tr_key("game.harness.remove")
 	place_button.disabled = not c.can_place()
-	keep_button.disabled = c.placed_count() != 5
-	combine_button.disabled = c.basic_combinations().is_empty()
+	select_button.disabled = c.placed_count() != 5 or c.selected_board_gem == null
+	combine_button.disabled = c.placed_count() != 5 or c.selected_board_gem == null or c.basic_combinations().is_empty()
 	degrade_button.disabled = c.placed_count() != 5
 	remove_button.disabled = not c.stones.has(_cell())
