@@ -42,6 +42,30 @@ func begin_round(value := 1) -> void:
 	construction_changed.emit(0, MAX_PLACEMENTS)
 	gem_pool_changed.emit()
 
+func reset_current_round() -> void:
+	if phases == null or phases.phase != GamePhaseMachine.Phase.CONSTRUCTION:
+		return
+	# Only undo placements created in the active construction round. Gems and
+	# stones from earlier waves are part of the persisted strategy.
+	for gem: GemInstance in current_gems.duplicate():
+		if grid != null and grid.state_at(gem.cell) == GridModel.CellState.OCCUPIED: grid.release(gem.cell)
+	for cell in stones.keys():
+		var stone := stones[cell] as StoneInstance
+		if stone == null or stone.round_id != round_id: continue
+		if grid != null and grid.state_at(cell) == GridModel.CellState.OCCUPIED: grid.release(cell)
+		stones.erase(cell)
+	current_gems.clear()
+	for gem: GemInstance in board_gems.duplicate():
+		if gem.round_id == round_id: board_gems.erase(gem)
+	selected_gem = null
+	selected_board_gem = null
+	selected_result = null
+	selected_stone_cell = Vector2i(-1, -1)
+	available_gems.clear()
+	if generator != null: generator.reset_round(round_id)
+	construction_changed.emit(0, MAX_PLACEMENTS)
+	gem_pool_changed.emit()
+
 func ensure_gem_pool(player_level := 1) -> void:
 	if generator == null or not available_gems.is_empty(): return
 	for _i in range(MAX_PLACEMENTS):

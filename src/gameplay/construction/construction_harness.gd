@@ -13,7 +13,7 @@ func setup(value: GameRuntime) -> void:
 	runtime = value
 	custom_minimum_size = Vector2(280, 0)
 	var panel_style := StyleBoxTexture.new()
-	panel_style.texture = load("res://assets/art/gameplay/hud_blue.png")
+	panel_style.texture = load("res://assets/art/gameplay/hud/hud_blue.png")
 	panel_style.texture_margin_left = 8.0; panel_style.texture_margin_top = 8.0; panel_style.texture_margin_right = 8.0; panel_style.texture_margin_bottom = 8.0
 	add_theme_stylebox_override("panel", panel_style)
 	var column := VBoxContainer.new()

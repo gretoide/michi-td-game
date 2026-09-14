@@ -1,3 +1,13 @@
 *.mp3 filter=lfs diff=lfs merge=lfs -text
 *.ogg filter=lfs diff=lfs merge=lfs -text
 *.wav filter=lfs diff=lfs merge=lfs -text
+
+# Binary game assets are stored through Git LFS. Godot .import metadata stays
+# in regular Git so the project can reimport assets deterministically.
+assets/**/*.png filter=lfs diff=lfs merge=lfs -text
+assets/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+assets/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+assets/**/*.ttf filter=lfs diff=lfs merge=lfs -text
+assets/**/*.otf filter=lfs diff=lfs merge=lfs -text
+*.psd filter=lfs diff=lfs merge=lfs -text
+assets/**/*.psd filter=lfs diff=lfs merge=lfs -text

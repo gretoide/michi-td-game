@@ -19,4 +19,8 @@ La carga usa `ResourceLoader` sobre archivos `.tres`, por lo que los datos queda
 - Fuente funcional: documentos FR y datasets publicados en Drive.
 - Contrato ejecutable: `.tres` versionados en este repositorio.
 - Integración completa: MIC-45, MIC-46 y MIC-48 en M5.
+
+## Implementación M5 — 14 sep 2026
+
+El cargador conserva `data/gameplay/catalog.tres` como entry point y expande el contenido canónico mediante `src/core/data/m5_content_catalog.gd` antes de ejecutar la validación. Se integraron 8 gemas con niveles 1–7, 38 recetas normales, 8 secretas y 50 perfiles/waves. Las recetas secretas permanecen disponibles sólo para matching contextual; `Natural Zumurud` mantiene `Spell Steal` como placeholder V1. Las variantes de enemigos se reducen a la primera variante jugable y se filtran las abilities fuera de alcance.
 - Seeds reproducibles: servicio `RandomSource` de MIC-68 en M0.

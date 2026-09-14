@@ -46,10 +46,13 @@ var session_loader_timer: Timer
 var session_loader_frames: Array[Texture2D] = []
 var game_runtime: GameRuntime
 var gameplay_view: GameplayView
+var settings_store: SettingsStore
 
 func _ready() -> void:
     api = ApiClient.new(); add_child(api)
     auth = AuthService.new(); add_child(auth); auth.setup(api)
+    settings_store = SettingsStore.new(); settings_store.load_settings(); LocalizationService.set_locale(settings_store.locale); settings_store.changed.connect(_update_music_toggle)
+    LocalizationService.locale_changed.connect(func(value: String): settings_store.set_locale(value))
     api.request_started.connect(func(): CursorManager.set_busy(true))
     api.completed.connect(func(_success, _status, _data, _error): CursorManager.set_busy(false))
     auth.succeeded.connect(_on_auth_succeeded); auth.failed.connect(_on_auth_failed)
@@ -65,7 +68,10 @@ func _ready() -> void:
 func _start_home_music() -> void:
     var stream := load("res://assets/audio/home_theme.mp3") as AudioStreamMP3
     if stream == null: return
-    stream.loop = true; home_music = AudioStreamPlayer.new(); home_music.stream = stream; home_music.volume_db = -16.0; add_child(home_music); home_music.play(); _update_music_toggle()
+    if AudioServer.get_bus_index("Music") < 0:
+        AudioServer.add_bus()
+        AudioServer.set_bus_name(AudioServer.bus_count - 1, "Music")
+    stream.loop = true; home_music = AudioStreamPlayer.new(); home_music.stream = stream; home_music.bus = "Music"; home_music.volume_db = -16.0; add_child(home_music); home_music.play(); settings_store._apply_audio(); _update_music_toggle()
 
 func _build_ui() -> void:
     var background := ColorRect.new(); background.color = Color("0e1524"); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(background)
@@ -153,7 +159,7 @@ func _style_link_button(button: Button) -> void:
     button.add_theme_stylebox_override("focus", empty)
 
 func _create_input(placeholder: String, secret: bool) -> LineEdit:
-    var field := LineEdit.new(); field.placeholder_text = placeholder; field.custom_minimum_size = Vector2(0,44); field.secret = secret; var normal := StyleBoxFlat.new(); normal.bg_color = Color("241913"); normal.border_color = Color("5f3826"); normal.set_border_width_all(2); normal.set_corner_radius_all(4); normal.content_margin_left = 14; normal.content_margin_right = 14; normal.content_margin_top = 8; normal.content_margin_bottom = 8; var focus := normal.duplicate() as StyleBoxFlat; focus.border_color = Color("c87a35"); field.add_theme_stylebox_override("normal",normal); field.add_theme_stylebox_override("focus",focus); field.add_theme_color_override("font_color",Color("fff3d6")); field.add_theme_color_override("font_placeholder_color",Color(0.92,0.86,0.76,0.72)); return field
+    var field := LineEdit.new(); field.placeholder_text = placeholder; field.custom_minimum_size = Vector2(0,44); field.secret = secret; CursorManager.set_text_cursor(field); var normal := StyleBoxFlat.new(); normal.bg_color = Color("241913"); normal.border_color = Color("5f3826"); normal.set_border_width_all(2); normal.set_corner_radius_all(4); normal.content_margin_left = 14; normal.content_margin_right = 14; normal.content_margin_top = 8; normal.content_margin_bottom = 8; var focus := normal.duplicate() as StyleBoxFlat; focus.border_color = Color("c87a35"); field.add_theme_stylebox_override("normal",normal); field.add_theme_stylebox_override("focus",focus); field.add_theme_color_override("font_color",Color("fff3d6")); field.add_theme_color_override("font_placeholder_color",Color(0.92,0.86,0.76,0.72)); return field
 
 func _add_password_icon_padding(field: LineEdit) -> void:
     for state in ["normal", "focus"]:
@@ -188,11 +194,11 @@ func _refresh_localized_text(_value: String) -> void:
     _update_music_toggle()
 
 func _toggle_home_music() -> void:
-    if is_instance_valid(home_music): home_music.stream_paused = not home_music.stream_paused
-    _update_music_toggle()
+    if is_instance_valid(settings_store): settings_store.set_music_enabled(not settings_store.music_enabled)
 func _update_music_toggle() -> void:
     if not is_instance_valid(music_toggle_button): return
-    var playing := is_instance_valid(home_music) and not home_music.stream_paused; music_toggle_button.icon = load("res://assets/ui/icons/music_enabled.png" if playing else "res://assets/ui/icons/music_disabled.png"); music_toggle_button.tooltip_text = LocalizationService.tr_key("music.pause" if playing else "music.play")
+    var playing := is_instance_valid(settings_store) and settings_store.music_enabled
+    music_toggle_button.icon = load("res://assets/ui/icons/music_enabled.png" if playing else "res://assets/ui/icons/music_disabled.png"); music_toggle_button.tooltip_text = LocalizationService.tr_key("music.pause" if playing else "music.play")
 
 func _toggle_password_visibility(visible: bool) -> void:
     password_input.secret = not visible
@@ -248,6 +254,7 @@ func _show_landing() -> void:
         welcome.queue_free()
         welcome = null
     root_ui.visible = true
+    glass_panel.visible = true
     welcome_menu.visible = true
     auth_title.visible = false
     alias_input.visible = false
@@ -284,7 +291,20 @@ func _start_new_game() -> void:
     if is_instance_valid(verification): verification.queue_free()
     if is_instance_valid(welcome): welcome.queue_free()
     if is_instance_valid(gameplay_view): gameplay_view.queue_free()
-    gameplay_view = GameplayView.new(); gameplay_view.setup(game_runtime); add_child(gameplay_view)
+    gameplay_view = GameplayView.new(); add_child(gameplay_view); gameplay_view.main_menu_requested.connect(_on_gameplay_main_menu_requested); gameplay_view.logout_requested.connect(_on_gameplay_logout_requested); gameplay_view.setup(game_runtime, settings_store)
+
+func _on_gameplay_main_menu_requested() -> void:
+    if is_instance_valid(gameplay_view): gameplay_view.hide(); gameplay_view.queue_free()
+    gameplay_view = null
+    game_runtime = null
+    _show_welcome(str(SessionStore.user.get("alias", "jugador")))
+
+func _on_gameplay_logout_requested() -> void:
+    if is_instance_valid(gameplay_view): gameplay_view.hide(); gameplay_view.queue_free()
+    gameplay_view = null
+    game_runtime = null
+    auth.logout()
+    _show_landing()
 func _on_verification_required(email: String) -> void: submit_button.disabled = false; verification_email = email if email != "" else email_input.text.strip_edges(); verification_password = password_input.text; _show_verification()
 func _show_verification() -> void:
     global_controls_layer.visible = true
@@ -327,6 +347,8 @@ func _show_welcome(alias := "") -> void:
     welcome.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     welcome.z_index = 5
     welcome.setup(display_alias)
+    welcome.enter_requested.connect(_start_new_game)
+    welcome.logout_requested.connect(func(): auth.logout(); _show_landing())
     parchment_panel.add_child(welcome)
 
 func _show_session_loader() -> void:

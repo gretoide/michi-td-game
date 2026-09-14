@@ -19,6 +19,10 @@ godot --headless --path . --script res://test/foundation/run.gd
 godot --headless --path . --script res://test/gameplay/m1/run.gd
 godot --headless --path . --script res://test/gameplay/m2/run.gd
 godot --headless --path . --script res://test/gameplay/m3/run.gd
+godot --headless --path . --script res://test/gameplay/m4/run.gd
+godot --headless --path . --script res://test/gameplay/m5/run.gd
+godot --headless --path . --script res://test/gameplay/m6/run.gd
+godot --headless --path . --script res://test/gameplay/m7/run.gd
 ```
 
 ## Validar y exportar
@@ -28,6 +32,8 @@ godot --headless --path . --editor --quit
 godot --headless --path . --quit-after 2
 godot --headless --path . --export-debug "Windows Desktop" build/michi-td.exe
 ```
+
+La guía de arquitectura y la matriz de regresión están en `docs/README.md`.
 
 El access token se mantiene únicamente en memoria. Para reconocer al usuario al reabrir el juego se guarda solo el refresh token opaco en `user://session.cfg`; al cerrar sesión se revoca y se elimina. El idioma se guarda por separado en `user://preferences.cfg` y se conserva al crear una partida nueva.
 

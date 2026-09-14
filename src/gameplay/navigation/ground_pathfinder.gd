@@ -18,8 +18,10 @@ func find_route(layout: MapLayout) -> Array[Vector2i]:
 
 func can_occupy_without_blocking(cell: Vector2i, layout: MapLayout) -> bool:
 	if not grid.occupy(cell): return false
+	var previous_revision := grid.revision - 1
 	var valid := not find_route(layout).is_empty()
 	grid.release(cell)
+	grid.revision = previous_revision
 	return valid
 
 func _find_segment(start: Vector2i, goal: Vector2i) -> Array[Vector2i]:

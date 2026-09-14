@@ -83,7 +83,8 @@ func start_first_wave() -> bool:
 		phases.resolve_construction()
 	if phases.phase != GamePhaseMachine.Phase.COMBAT: return false
 	var definition := wave_definitions[phases.wave_number - 1] as WaveDefinition
-	var profile := foundation.catalog.enemy_profiles[0] as EnemyProfileDefinition
+	var profile := foundation.catalog.enemy_profile_by_id(definition.enemy_profile_id) as EnemyProfileDefinition
+	if profile == null: return false
 	current_wave_is_boss = definition.boss
 	definition.spawn_count = 1 if definition.boss else maxi(1, 10 + progress.future_count_modifier)
 	player_state.base_enemy_count = definition.spawn_count
@@ -97,21 +98,21 @@ func tick(delta: float) -> void:
 		combat.tick(delta)
 		effects.tick(delta)
 
-func _on_wave_enemy_spawned(_id: int, profile: EnemyProfileDefinition) -> void:
+func _on_wave_enemy_spawned(wave_enemy_id: int, profile: EnemyProfileDefinition) -> void:
 	var enemy := combat.spawn_enemy(profile, map.spawn)
 	if enemy != null:
 		var tier := floori((phases.wave_number - 1) / 10.0)
 		enemy.xp_reward = (3000 if current_wave_is_boss else 48) * int(pow(2, tier))
 		enemy.set_checkpoint_cells(map.checkpoints)
-		enemy.died.connect(func(): _on_enemy_resolved(enemy, &"death"))
-		enemy.escaped.connect(func(): _on_enemy_resolved(enemy, &"escaped"))
+		enemy.died.connect(func(): _on_enemy_resolved(enemy, wave_enemy_id, &"death"))
+		enemy.escaped.connect(func(): _on_enemy_resolved(enemy, wave_enemy_id, &"escaped"))
 		enemy.checkpoint_reached.connect(func(index: int): progress.on_checkpoint(index, current_wave_is_boss))
 
-func _on_enemy_resolved(enemy: EnemyRuntime, resolution: StringName) -> void:
-	if not wave.resolve_enemy(enemy.id, resolution): return
+func _on_enemy_resolved(enemy: EnemyRuntime, wave_enemy_id: int, resolution: StringName) -> void:
+	if not wave.resolve_enemy(wave_enemy_id, resolution): return
 	if resolution == &"death":
 		var reward := 150 if current_wave_is_boss else 5
-		economy.reward(enemy.id, reward, resolution); progression.add_xp(enemy.xp_reward); progress.on_kill(current_wave_is_boss, current_wave_is_boss and phases.wave_number == 50); outcome.register_kill()
+		economy.reward(enemy.id, reward, resolution); progression.add_xp(enemy.xp_reward); progress.on_kill(current_wave_is_boss, current_wave_is_boss and phases.wave_number == 50); outcome.register_kill(); player_state.score += 1
 	else:
 		economy.reward(enemy.id, 0, resolution); progress.on_final_checkpoint(current_wave_is_boss); outcome.register_escape(enemy.attack)
 
@@ -119,7 +120,7 @@ func _sync_combat_towers() -> void:
 	if combat == null: return
 	combat.towers.clear()
 	for gem: GemInstance in construction.board_gems:
-		var definition := foundation.catalog.gem_by_id(gem.id) as GemDefinition
+		var definition := foundation.catalog.gem_definition_for_id(gem.id) as GemDefinition
 		var tower := TowerRuntime.new(); tower.setup(gem, definition, Vector2(gem.cell) * 100.0 + Vector2.ONE * 50.0); combat.add_tower(tower)
 
 func _on_construction_finalized(_result: GemInstance) -> void:
@@ -138,6 +139,10 @@ func _advance_after_reward() -> void:
 
 func _build_wave_definitions() -> Array[WaveDefinition]:
 	var result: Array[WaveDefinition] = []
+	if foundation != null and foundation.catalog != null and foundation.catalog.waves.size() == 50:
+		for item in foundation.catalog.waves:
+			result.append(item as WaveDefinition)
+		return result
 	for number in range(1, 51):
 		var definition := WaveDefinition.new(); definition.number = number; definition.enemy_profile_id = &"frenzied_pig"; definition.boss = number in [10, 20, 30, 40, 50]; definition.spawn_count = 1 if definition.boss else 10; definition.spawn_interval = 1.0; result.append(definition)
 	return result

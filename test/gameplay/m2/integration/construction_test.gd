@@ -43,3 +43,18 @@ func run(suite: FoundationTestSuite) -> void:
 	if not one_shot_options.is_empty():
 		var one_shot_result := one_shot_runtime.construction.execute_recipe(one_shot_options[0].recipe, one_shot_options[0].gems[0], true)
 		suite.expect(one_shot_result != null and one_shot_result.mvp_level == 0, "One Shot does not transfer MVP")
+
+	var reset_runtime := GameRuntime.new(); reset_runtime.initialize(16)
+	var previous_gem := GemInstance.new(&"emerald", 2, GemInstance.Quality.FLAWED)
+	previous_gem.cell = Vector2i(7, 7); previous_gem.round_id = 0
+	reset_runtime.grid.occupy(previous_gem.cell); reset_runtime.construction.board_gems.append(previous_gem)
+	var previous_stone := StoneInstance.new(&"ruby", Vector2i(7, 8), 0)
+	reset_runtime.grid.occupy(previous_stone.cell); reset_runtime.construction.stones[previous_stone.cell] = previous_stone
+	var active_cell := Vector2i(8, 8)
+	reset_runtime.construction.place_existing(GemInstance.new(&"topaz", 1, GemInstance.Quality.CHIPPED), active_cell)
+	reset_runtime.construction.reset_current_round()
+	suite.expect(reset_runtime.construction.board_gems.has(previous_gem), "Restart preserves gems from previous rounds")
+	suite.expect(reset_runtime.construction.stones.has(previous_stone.cell), "Restart preserves stones from previous rounds")
+	suite.expect_equal(reset_runtime.grid.state_at(previous_stone.cell), GridModel.CellState.OCCUPIED, "Restart keeps previous stone cells occupied")
+	suite.expect_equal(reset_runtime.construction.placed_count(), 0, "Restart clears active round placements")
+	suite.expect(reset_runtime.grid.is_walkable(active_cell), "Restart releases active round cells")

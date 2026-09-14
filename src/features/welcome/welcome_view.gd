@@ -2,6 +2,7 @@ class_name WelcomeView
 extends PanelContainer
 
 signal logout_requested
+signal enter_requested
 
 func setup(alias := "jugador") -> void:
     custom_minimum_size = Vector2(0, 230)
@@ -17,17 +18,20 @@ func setup(alias := "jugador") -> void:
     column.add_theme_font_override("font", load("res://assets/fonts/comic_neue_sans_id.ttf"))
     margin.add_child(column)
     var title := Label.new()
-    title.text = "Bienvenido, " + alias
+    var localization := get_node_or_null("/root/LocalizationService")
+    title.text = localization.tr_key("welcome.title", {"alias": alias}) if localization != null else "Bienvenido, " + alias
     title.add_theme_font_size_override("font_size", 32)
     title.add_theme_color_override("font_color", Color("321c12"))
     column.add_child(title)
     var info := Label.new()
-    info.text = "Tu cuenta está lista. Prepará tus defensas para la próxima batalla."
+    info.text = localization.tr_key("welcome.info") if localization != null else "Tu cuenta está lista. Prepará tus defensas para la próxima batalla."
     info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     info.add_theme_color_override("font_color", Color("4a2817"))
     column.add_child(info)
     var enter := Button.new()
-    enter.text = "Ingresar  →"
+    enter.text = (localization.tr_key("welcome.enter") if localization != null else "Ingresar") + "  →"
+    enter.icon = load("res://assets/ui/icons/gameplay/main_menu.png")
+    enter.expand_icon = true
     enter.custom_minimum_size = Vector2(300, 54)
     enter.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     enter.tooltip_text = "Ingresar al reino"
@@ -39,7 +43,19 @@ func setup(alias := "jugador") -> void:
     enter.add_theme_color_override("font_outline_color", Color("3a2116"))
     enter.add_theme_constant_override("outline_size", 2)
     CursorManager.set_clickable(enter)
+    enter.pressed.connect(func(): enter_requested.emit())
     column.add_child(enter)
+    var logout := Button.new()
+    logout.text = localization.tr_key("welcome.logout") if localization != null else "Cerrar sesión"
+    logout.icon = load("res://assets/ui/icons/gameplay/logout.png")
+    logout.expand_icon = true
+    logout.custom_minimum_size = Vector2(240, 44)
+    logout.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+    logout.add_theme_stylebox_override("normal", _button_style("res://assets/ui/buttons/button_normal.png"))
+    logout.add_theme_stylebox_override("hover", _button_style("res://assets/ui/buttons/button_hover.png"))
+    logout.add_theme_color_override("font_color", Color("fff3d6"))
+    logout.pressed.connect(func(): logout_requested.emit())
+    column.add_child(logout)
 
 func _button_style(path: String, tint := Color.WHITE) -> StyleBoxTexture:
     var style := StyleBoxTexture.new()

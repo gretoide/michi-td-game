@@ -25,3 +25,14 @@ func enemy_profile_by_id(id: StringName) -> Resource:
 		if profile.id == id:
 			return profile
 	return null
+
+func gem_definition_for_id(id: StringName) -> Resource:
+	var basic := gem_by_id(id)
+	if basic != null: return basic
+	var recipe := recipe_by_id(id)
+	if recipe == null: return null
+	var definition := GemDefinition.new()
+	definition.id = id
+	definition.display_name = str(id).capitalize()
+	definition.levels = [{"level": 1, "quality": "Upgrade", "range": recipe.range_units, "damage": recipe.damage, "attack_speed": recipe.attack_speed, "ability_ids": recipe.ability_ids}]
+	return definition

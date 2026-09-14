@@ -20,7 +20,12 @@ func generate_for_wave(wave_number: int) -> Array[StringName]:
 	if wave_number <= 0 or wave_number >= 50 or wave_number % 5 != 0 or not candidates.is_empty(): return []
 	var valid: Array[StringName] = []
 	for skill_id in IDS:
-		if not catalog.skills.has(skill_id) or int(catalog.skills[skill_id].level) < 4 or catalog.skills.size() < 4:
+		# An unowned skill can only be offered while there is room in the
+		# four-slot catalog. Owned skills remain eligible until level 4.
+		if catalog.skills.has(skill_id):
+			if int(catalog.skills[skill_id].level) < 4:
+				valid.append(skill_id)
+		elif catalog.skills.size() < 4:
 			valid.append(skill_id)
 	var pool := valid.duplicate()
 	candidates.clear()

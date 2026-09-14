@@ -13,8 +13,12 @@ func run(suite: RefCounted) -> void:
 	suite.expect(loaded.catalog != null and loaded.catalog.gem_by_id(&"amethyst") != null, "Debe cargar la gema bootstrap")
 	suite.expect(loaded.catalog != null and loaded.catalog.gems.size() == 8, "El catálogo bootstrap debe contener los ocho tipos básicos")
 	suite.expect(loaded.catalog != null and loaded.catalog.recipe_by_id(&"silver") != null, "Debe cargar la receta bootstrap")
-	suite.expect(loaded.catalog != null and loaded.catalog.recipe_by_id(&"fixture_secret").secret, "Las recetas secretas deben cargarse para matching contextual")
-	suite.expect(loaded.catalog != null and loaded.catalog.enemy_profile_by_id(&"frenzied_pig") != null, "Debe cargar el perfil bootstrap")
+	var has_secret := false
+	if loaded.catalog != null:
+		for recipe in loaded.catalog.recipes:
+			if recipe.secret: has_secret = true; break
+	suite.expect(loaded.catalog != null and has_secret, "Las recetas secretas deben cargarse para matching contextual")
+	suite.expect(loaded.catalog != null and loaded.catalog.enemy_profiles.size() == 50, "Debe cargar los cincuenta perfiles de waves")
 	var missing := Loader.new().load_catalog("res://data/gameplay/missing.tres")
 	suite.expect(not missing.is_valid() and missing.errors[0].code == "missing_file", "Un archivo ausente debe producir error accionable")
 	var duplicate := Catalog.new()
