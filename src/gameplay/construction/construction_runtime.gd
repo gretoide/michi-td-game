@@ -10,6 +10,7 @@ signal combination_completed(recipe_id: StringName, result: GemInstance)
 signal selection_changed(gem: GemInstance)
 signal stone_selected(cell: Vector2i)
 signal gem_pool_changed
+signal navigation_changed
 
 const MAX_PLACEMENTS := 5
 var grid: GridModel
@@ -40,6 +41,7 @@ func begin_round(value := 1) -> void:
 	current_gems.clear(); available_gems.clear(); selected_gem = null; selected_board_gem = null; selected_result = null; selected_stone_cell = Vector2i(-1, -1)
 	if generator != null: generator.reset_round(round_id)
 	construction_changed.emit(0, MAX_PLACEMENTS)
+	navigation_changed.emit()
 	gem_pool_changed.emit()
 
 func reset_current_round() -> void:
@@ -64,6 +66,7 @@ func reset_current_round() -> void:
 	available_gems.clear()
 	if generator != null: generator.reset_round(round_id)
 	construction_changed.emit(0, MAX_PLACEMENTS)
+	navigation_changed.emit()
 	gem_pool_changed.emit()
 
 func ensure_gem_pool(player_level := 1) -> void:
@@ -101,20 +104,26 @@ func gem_at_cell(cell: Vector2i) -> GemInstance:
 	return null
 
 func select_board_gem(cell: Vector2i) -> GemInstance:
-	if phases == null or phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or placed_count() != MAX_PLACEMENTS:
+	if phases == null or phases.phase not in [GamePhaseMachine.Phase.CONSTRUCTION, GamePhaseMachine.Phase.COMBAT]:
 		return null
-	var gem := gem_at_cell(cell)
+	var gem: GemInstance = null
+	for candidate: GemInstance in board_gems:
+		if candidate.cell == cell: gem = candidate; break
 	if gem == null: return null
 	selected_board_gem = gem
 	selection_changed.emit(gem)
 	return gem
 
 func select_stone(cell: Vector2i) -> bool:
-	if phases == null or phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or not stones.has(cell): return false
+	if phases == null or phases.phase not in [GamePhaseMachine.Phase.CONSTRUCTION, GamePhaseMachine.Phase.COMBAT] or not stones.has(cell): return false
 	selected_stone_cell = cell; stone_selected.emit(cell); return true
 
 func can_place() -> bool:
 	return phases != null and phases.phase == GamePhaseMachine.Phase.CONSTRUCTION and placed_count() < MAX_PLACEMENTS
+
+func can_place_at(cell: Vector2i) -> bool:
+	if not can_place() or _placement_error(cell) != &"": return false
+	return pathfinder != null and pathfinder.can_occupy_without_blocking(cell, _map_for_path())
 
 func place_gem(cell: Vector2i, player_level := 1) -> GemInstance:
 	if not can_place():
@@ -150,11 +159,12 @@ func _place_existing(gem: GemInstance, cell: Vector2i) -> GemInstance:
 		grid.release(cell); placement_rejected.emit(&"blocks_ground_path", cell); return null
 	gem.cell = cell; gem.round_id = round_id
 	current_gems.append(gem); board_gems.append(gem)
-	gem_placed.emit(gem); construction_changed.emit(placed_count(), MAX_PLACEMENTS)
+	gem_placed.emit(gem); construction_changed.emit(placed_count(), MAX_PLACEMENTS); navigation_changed.emit()
 	return gem
 
 func _placement_error(cell: Vector2i) -> StringName:
 	if not grid.is_in_bounds(cell): return &"out_of_bounds"
+	if grid.is_restricted(cell): return &"restricted"
 	if grid.is_reserved(cell): return &"reserved"
 	if not grid.is_walkable(cell): return &"occupied"
 	return &""
@@ -170,7 +180,9 @@ func remove_stone(cell: Vector2i) -> bool:
 		return false
 	stones.erase(cell)
 	selected_stone_cell = Vector2i(-1, -1)
-	return grid.release(cell)
+	var released := grid.release(cell)
+	if released: navigation_changed.emit()
+	return released
 
 func degrade(gem: GemInstance) -> GemInstance:
 	if phases == null or not phases.is_action_allowed(&"degrade") or gem == null or gem not in current_gems or placed_count() != MAX_PLACEMENTS:

@@ -3,6 +3,20 @@ extends Node
 signal locale_changed(locale: String)
 const DEFAULT_LOCALE := "en"
 const SUPPORTED_LOCALES := ["en", "es"]
+const ENEMY_DISPLAY_NAMES := {
+    "en": {
+        "frenzied_pig": "Frenzied Catomancer",
+        "swift_frog_w2": "Swift Shadow Catomancer",
+        "invisible_spider_w8": "Invisible Webcatomancer",
+        "thrilling_ghost_w40": "Spectral Catomancer"
+    },
+    "es": {
+        "frenzied_pig": "Gatomante Frenético",
+        "swift_frog_w2": "Gatomante Sombra Saltarín",
+        "invisible_spider_w8": "Michi Tejedor Invisible",
+        "thrilling_ghost_w40": "Espectro Gatomante"
+    }
+}
 var locale := DEFAULT_LOCALE
 var diagnostics := PackedStringArray()
 var _catalog := {
@@ -75,6 +89,12 @@ const GAMEPLAY_EXTRA := {
 func _init() -> void:
     for supported in SUPPORTED_LOCALES: _catalog[supported].merge(EXTRA_CATALOG[supported], true)
     for supported in SUPPORTED_LOCALES: _catalog[supported].merge(GAMEPLAY_EXTRA[supported], true)
+    _catalog["en"]["game.feedback.help"] = "Hover a valid cell and press Q to place a gem, or click to select."
+    _catalog["en"]["game.feedback.place_hint"] = "Hover a valid cell and press Q to place a gem."
+    _catalog["en"]["game.help.place"] = "Place: hover a valid cell during Construction and press Q. A valid placement occupies that cell."
+    _catalog["es"]["game.feedback.help"] = "Pasá sobre una celda válida y apretá Q para colocar una gema, o hacé click para seleccionar."
+    _catalog["es"]["game.feedback.place_hint"] = "Pasá sobre una celda válida y apretá Q para colocar una gema."
+    _catalog["es"]["game.help.place"] = "Colocar: pasá sobre una celda válida durante Construcción y apretá Q. Una colocación válida ocupa esa celda."
 
 func _ready() -> void:
     load_local_preference()
@@ -95,6 +115,18 @@ func tr_key(key: String, values: Dictionary = {}) -> String:
     var result := str(selected.get(key, english.get(key, key)))
     for name in values: result = result.replace("{" + str(name) + "}", str(values[name]))
     return result
+
+func enemy_display_name(id: StringName, catalog_name: String = "") -> String:
+    var key := str(id)
+    var localized: Dictionary = ENEMY_DISPLAY_NAMES.get(locale, {})
+    if localized.has(key):
+        return str(localized[key])
+    var base := catalog_name.strip_edges()
+    if base.is_empty():
+        base = key.replace("_", " ").capitalize()
+    if locale == "es":
+        return "Gatomante " + base
+    return "Catomancer " + base
 
 func validate_catalog() -> PackedStringArray:
     var errors := PackedStringArray()

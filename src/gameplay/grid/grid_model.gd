@@ -9,6 +9,7 @@ const CELL_SIZE := 100.0
 
 var _states: Dictionary = {}
 var _reserved: Dictionary = {}
+var _restricted: Dictionary = {}
 var revision := 0
 
 func is_in_bounds(cell: Vector2i) -> bool:
@@ -31,6 +32,13 @@ func reserve(cell: Vector2i) -> bool:
 
 func is_reserved(cell: Vector2i) -> bool:
 	return _reserved.has(cell)
+
+func restrict(cell: Vector2i) -> bool:
+	if not is_in_bounds(cell): return false
+	_restricted[cell] = true; revision += 1; return true
+
+func is_restricted(cell: Vector2i) -> bool:
+	return _restricted.has(cell)
 
 func block(cell: Vector2i) -> bool:
 	if not is_walkable(cell): return false
@@ -55,4 +63,4 @@ func world_to_cell(position: Vector2) -> Vector2i:
 	return Vector2i(floori(position.x / CELL_SIZE), floori(position.y / CELL_SIZE))
 
 func clear() -> void:
-	_states.clear(); _reserved.clear(); revision += 1
+	_states.clear(); _reserved.clear(); _restricted.clear(); revision += 1
