@@ -36,7 +36,7 @@ func setup(value: GameRuntime) -> void:
 	_refresh()
 
 func _button(label_text: String, action: Callable) -> Button:
-	var button := Button.new(); button.text = label_text; button.pressed.connect(action); return button
+	var button := Button.new(); button.text = label_text; CursorManager.set_clickable(button); button.pressed.connect(action); return button
 
 func _select_final() -> void:
 	if runtime.construction.selected_board_gem != null:

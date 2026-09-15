@@ -24,4 +24,3 @@ func clone() -> GemInstance:
 
 func is_on_board() -> bool:
 	return cell.x >= 0 and cell.y >= 0
-

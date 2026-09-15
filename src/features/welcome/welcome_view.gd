@@ -34,7 +34,7 @@ func setup(alias := "jugador") -> void:
     enter.expand_icon = true
     enter.custom_minimum_size = Vector2(300, 54)
     enter.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-    enter.tooltip_text = "Ingresar al reino"
+    enter.tooltip_text = localization.tr_key("welcome.enter.tooltip") if localization != null else "Ingresar al reino"
     enter.add_theme_stylebox_override("normal", _button_style("res://assets/ui/buttons/button_normal.png"))
     enter.add_theme_stylebox_override("hover", _button_style("res://assets/ui/buttons/button_hover.png"))
     enter.add_theme_stylebox_override("pressed", _button_style("res://assets/ui/buttons/button_hover.png", Color(0.88, 0.88, 0.88, 1.0)))
@@ -53,7 +53,10 @@ func setup(alias := "jugador") -> void:
     logout.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     logout.add_theme_stylebox_override("normal", _button_style("res://assets/ui/buttons/button_normal.png"))
     logout.add_theme_stylebox_override("hover", _button_style("res://assets/ui/buttons/button_hover.png"))
+    logout.add_theme_stylebox_override("pressed", _button_style("res://assets/ui/buttons/button_hover.png", Color(0.88, 0.88, 0.88, 1.0)))
     logout.add_theme_color_override("font_color", Color("fff3d6"))
+    logout.add_theme_color_override("font_hover_color", Color("ffd56a"))
+    CursorManager.set_clickable(logout)
     logout.pressed.connect(func(): logout_requested.emit())
     column.add_child(logout)
 

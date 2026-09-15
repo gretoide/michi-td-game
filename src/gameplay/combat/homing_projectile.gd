@@ -10,10 +10,11 @@ var target: EnemyRuntime
 var payload: DamagePipeline.DamageContext
 var active := true
 var source_gem_id := StringName()
+var ability_ids: PackedStringArray = []
 var direction := Vector2.RIGHT
 
-func setup(value_origin: Vector2, value_target: EnemyRuntime, value_payload: DamagePipeline.DamageContext, value_speed := 1000.0, value_source_gem_id := StringName()) -> void:
-	origin = value_origin; position = origin; target = value_target; payload = value_payload; speed = value_speed; source_gem_id = value_source_gem_id
+func setup(value_origin: Vector2, value_target: EnemyRuntime, value_payload: DamagePipeline.DamageContext, value_speed := 1000.0, value_source_gem_id := StringName(), value_ability_ids := PackedStringArray()) -> void:
+	origin = value_origin; position = origin; target = value_target; payload = value_payload; speed = value_speed; source_gem_id = value_source_gem_id; ability_ids = value_ability_ids.duplicate()
 	if target != null and not position.is_equal_approx(target.position):
 		direction = position.direction_to(target.position)
 

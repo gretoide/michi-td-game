@@ -7,6 +7,7 @@ var id: StringName
 var position := Vector2.ZERO
 var gem: GemInstance
 var stats := TowerCombatStats.new()
+var abilities: PackedStringArray = []
 var damage_type := DamagePipeline.DamageType.PHYSICAL
 var targeting := TargetController.new()
 var cooldown := 0.0
@@ -14,15 +15,23 @@ var stopped := false
 var disarmed := false
 
 func setup(value_gem: GemInstance, definition: GemDefinition, world_position := Vector2.ZERO) -> void:
-	gem = value_gem; id = gem.id; position = world_position; stats = TowerCombatStats.from_gem(gem, definition); damage_type = _damage_type_for(definition)
+	gem = value_gem; id = gem.id; position = world_position; stats = TowerCombatStats.from_gem(gem, definition); abilities = _abilities_for(definition); damage_type = _damage_type_for(definition)
+
+func _abilities_for(definition: GemDefinition) -> PackedStringArray:
+	var result := PackedStringArray()
+	var level_data := TowerCombatStats.level_data_for(gem, definition)
+	for value in level_data.get("ability_ids", PackedStringArray()):
+		var key := str(value).to_lower()
+		if not key.is_empty() and key != "sin_efecto" and key != "spell_steal_placeholder_v1" and key not in result: result.append(key)
+	var display_ability := str(level_data.get("ability", "")).to_lower().strip_edges()
+	if not display_ability.is_empty():
+		var key := display_ability.split(" ")[0]
+		if key not in result: result.append(key)
+	return result
 
 func _damage_type_for(definition: GemDefinition) -> DamagePipeline.DamageType:
 	if definition == null: return DamagePipeline.DamageType.PHYSICAL
-	var level_data: Dictionary = {}
-	for item in definition.levels:
-		if int(item.get("level", 1)) == gem.level:
-			level_data = item; break
-	if level_data.is_empty() and not definition.levels.is_empty(): level_data = definition.levels[0]
+	var level_data := TowerCombatStats.level_data_for(gem, definition)
 	var ability := str(level_data.get("ability", "")).to_lower()
 	var ability_ids: Variant = level_data.get("ability_ids", PackedStringArray())
 	var magic_words := ["poison", "slow", "aura", "burn", "stun", "corrupt", "recover", "accuracy", "overlook"]
@@ -44,4 +53,4 @@ func tick(delta: float, enemies: Array[EnemyRuntime], projectile_speed := 1000.0
 	var target := targeting.tick(position, stats.range_units, enemies)
 	if disarmed or target == null or cooldown > 0.0 or targeting.mode == TargetController.Mode.STOPPED: return null
 	var payload := DamagePipeline.DamageContext.new(); payload.base_damage = stats.damage; payload.damage_type = damage_type
-	var projectile := HomingProjectile.new(); projectile.setup(position, target, payload, projectile_speed, gem.id); cooldown = stats.attack_interval(); attack_started.emit(target, projectile); return projectile
+	var projectile := HomingProjectile.new(); projectile.setup(position, target, payload, projectile_speed, gem.id, abilities); cooldown = stats.attack_interval(); attack_started.emit(target, projectile); return projectile

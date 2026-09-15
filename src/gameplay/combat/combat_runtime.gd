@@ -53,8 +53,20 @@ func tick(delta: float) -> void:
 			if enemy.is_alive() and enemy.disarm_aura_radius > 0.0 and tower.position.distance_to(enemy.position) <= enemy.disarm_aura_radius:
 				tower.disarmed = true; break
 		var projectile := tower.tick(delta, enemies, projectile_speed)
-		if projectile != null: projectiles.append(projectile); projectile_created.emit(projectile)
+		if projectile != null:
+			projectile.impacted.connect(func(_result): _execute_tower_abilities(projectile))
+			projectiles.append(projectile); projectile_created.emit(projectile)
 	for projectile in projectiles.duplicate():
 		if not projectile.tick(delta): projectiles.erase(projectile)
 	enemies = enemies.filter(func(enemy: EnemyRuntime): return enemy != null and enemy.is_alive())
 	combat_changed.emit()
+
+func _execute_tower_abilities(projectile: HomingProjectile) -> void:
+	if effect_system == null or projectile == null or projectile.target == null: return
+	var target := projectile.target
+	for ability in projectile.ability_ids:
+		var key := str(ability).to_lower()
+		if key == "slow": effect_system.apply_slow(target, projectile.source_gem_id, 20.0, 1.5)
+		elif key == "poison": effect_system.apply_poison(target, projectile.source_gem_id, maxf(target.max_hp * 0.01, 1.0), 1.0)
+		elif key == "burn": effect_system.apply_burn(target, projectile.source_gem_id, maxf(target.max_hp * 0.01, 1.0), 1.0)
+		elif key == "stone_gaze": effect_system.apply_stone_gaze(target, projectile.source_gem_id, 1.0)

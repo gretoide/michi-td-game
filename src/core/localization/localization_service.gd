@@ -5,23 +5,25 @@ const DEFAULT_LOCALE := "en"
 const SUPPORTED_LOCALES := ["en", "es"]
 const ENEMY_DISPLAY_NAMES := {
     "en": {
-        "frenzied_pig": "Frenzied Catomancer",
+        "frenzied_pig": "Necromancer Cat",
         "swift_frog_w2": "Swift Shadow Catomancer",
-        "invisible_spider_w8": "Invisible Webcatomancer",
+        "invisible_spider_w8": "Invisible Ethereal Cat",
+        "invincible_dog_w10": "Necromancer Cat Boss",
         "thrilling_ghost_w40": "Spectral Catomancer"
     },
     "es": {
-        "frenzied_pig": "Gatomante Frenético",
+        "frenzied_pig": "Gato Nigromante",
         "swift_frog_w2": "Gatomante Sombra Saltarín",
-        "invisible_spider_w8": "Michi Tejedor Invisible",
+        "invisible_spider_w8": "Michi Etéreo Invisible",
+        "invincible_dog_w10": "Gato Nigromante Jefe",
         "thrilling_ghost_w40": "Espectro Gatomante"
     }
 }
 var locale := DEFAULT_LOCALE
 var diagnostics := PackedStringArray()
 var _catalog := {
-    "en": {"landing.title":"Welcome to the kingdom", "landing.hint":"Choose how you want to begin your adventure", "landing.create":"Create account", "landing.login":"Log in", "welcome.title":"Welcome, {alias}", "welcome.info":"Your account is ready. Prepare your defenses for the next battle.", "welcome.enter":"Enter the kingdom", "welcome.logout":"Log out", "auth.register.title":"Create account", "auth.login.title":"Log in", "auth.register.submit":"Sign up", "auth.login.submit":"Enter", "auth.back":"Back", "auth.alias":"Alias", "auth.email":"Email", "auth.password":"Password", "auth.register.prompt":"First time in the kingdom?", "auth.login.prompt":"Already defended this kingdom?", "auth.register.action":"Create account", "auth.login.action":"Log in", "session.restoring":"Restoring your session...", "music.pause":"Pause music", "music.play":"Play music", "locale.label":"Language", "verification.title":"Confirm your email", "verification.code_label":"Verification code", "verification.code_placeholder":"Enter the 6 digits", "verification.confirm":"Confirm code", "verification.resend":"Resend code", "verification.invalid_code":"Enter a valid 6-digit code", "verification.resent":"Code resent. Check your inbox."},
-    "es": {"landing.title":"Bienvenido al reino", "landing.hint":"Elegí cómo querés comenzar tu aventura", "landing.create":"Crear cuenta", "landing.login":"Iniciar sesión", "welcome.title":"Bienvenido, {alias}", "welcome.info":"Tu cuenta está lista. Prepará tus defensas para la próxima batalla.", "welcome.enter":"Entrar al reino", "welcome.logout":"Cerrar sesión", "auth.register.title":"Crear cuenta", "auth.login.title":"Iniciar sesión", "auth.register.submit":"Registrarme", "auth.login.submit":"Entrar", "auth.back":"Volver", "auth.alias":"Alias", "auth.email":"Email", "auth.password":"Contraseña", "auth.register.prompt":"¿Primera vez en el reino?", "auth.login.prompt":"¿Ya defendiste este reino?", "auth.register.action":"Crear cuenta", "auth.login.action":"Iniciar sesión", "session.restoring":"Reconociendo tu sesión...", "music.pause":"Pausar música", "music.play":"Reproducir música", "locale.label":"Idioma", "verification.title":"Confirmá tu email", "verification.code_label":"Código de verificación", "verification.code_placeholder":"Ingresá los 6 dígitos", "verification.confirm":"Confirmar código", "verification.resend":"Reenviar código", "verification.invalid_code":"Ingresá un código válido de 6 dígitos", "verification.resent":"Código reenviado. Revisá tu bandeja de entrada."}
+    "en": {"landing.title":"Welcome to the kingdom", "landing.hint":"Choose how you want to begin your adventure", "landing.create":"Create account", "landing.login":"Log in", "welcome.title":"Welcome, {alias}", "welcome.info":"Your account is ready. Prepare your defenses for the next battle.", "welcome.enter":"Enter the kingdom", "welcome.enter.tooltip":"Enter the kingdom", "welcome.logout":"Log out", "auth.register.title":"Create account", "auth.login.title":"Log in", "auth.register.submit":"Sign up", "auth.login.submit":"Enter", "auth.back":"Back", "auth.alias":"Alias", "auth.email":"Email", "auth.password":"Password", "auth.register.prompt":"First time in the kingdom?", "auth.login.prompt":"Already defended this kingdom?", "auth.register.action":"Create account", "auth.login.action":"Log in", "session.restoring":"Restoring your session...", "music.pause":"Pause music", "music.play":"Play music", "locale.label":"Language", "verification.title":"Confirm your email", "verification.code_label":"Verification code", "verification.code_placeholder":"Enter the 6 digits", "verification.confirm":"Confirm code", "verification.resend":"Resend code", "verification.invalid_code":"Enter a valid 6-digit code", "verification.resent":"Code resent. Check your inbox."},
+    "es": {"landing.title":"Bienvenido al reino", "landing.hint":"Elegí cómo querés comenzar tu aventura", "landing.create":"Crear cuenta", "landing.login":"Iniciar sesión", "welcome.title":"Bienvenido, {alias}", "welcome.info":"Tu cuenta está lista. Prepará tus defensas para la próxima batalla.", "welcome.enter":"Entrar al reino", "welcome.enter.tooltip":"Ingresar al reino", "welcome.logout":"Cerrar sesión", "auth.register.title":"Crear cuenta", "auth.login.title":"Iniciar sesión", "auth.register.submit":"Registrarme", "auth.login.submit":"Entrar", "auth.back":"Volver", "auth.alias":"Alias", "auth.email":"Email", "auth.password":"Contraseña", "auth.register.prompt":"¿Primera vez en el reino?", "auth.login.prompt":"¿Ya defendiste este reino?", "auth.register.action":"Crear cuenta", "auth.login.action":"Iniciar sesión", "session.restoring":"Reconociendo tu sesión...", "music.pause":"Pausar música", "music.play":"Reproducir música", "locale.label":"Idioma", "verification.title":"Confirmá tu email", "verification.code_label":"Código de verificación", "verification.code_placeholder":"Ingresá los 6 dígitos", "verification.confirm":"Confirmar código", "verification.resend":"Reenviar código", "verification.invalid_code":"Ingresá un código válido de 6 dígitos", "verification.resent":"Código reenviado. Revisá tu bandeja de entrada."}
 }
 
 const EXTRA_CATALOG := {
@@ -95,6 +97,58 @@ func _init() -> void:
     _catalog["es"]["game.feedback.help"] = "Pasá sobre una celda válida y apretá Q para colocar una gema, o hacé click para seleccionar."
     _catalog["es"]["game.feedback.place_hint"] = "Pasá sobre una celda válida y apretá Q para colocar una gema."
     _catalog["es"]["game.help.place"] = "Colocar: pasá sobre una celda válida durante Construcción y apretá Q. Una colocación válida ocupa esa celda."
+    _catalog["en"].merge({
+        "game.player.level": "Level {level}",
+        "game.player.xp": "XP {xp} / next {next}",
+        "game.zoom": "Zoom",
+        "game.inspector.tower.title": "Selected tower",
+        "game.inspector.enemy.title": "Selected enemy",
+        "game.inspector.stone.title": "Selected stone",
+        "game.inspector.tower.stats": "• Level: {level}\n• Damage: {damage}\n• Range: {range}\n• Attack speed: {speed}\n• Abilities: {abilities}",
+        "game.inspector.enemy.stats": "• HP: {hp} / {max_hp}\n• Armor: {armor}\n• Magic resistance: {magic}"
+		, "game.inspector.combinations.none": "• No valid combinations for this selection"
+		, "game.inspector.combinations.available": "• Available combinations: {list}"
+		, "game.combinations.title": "Available combinations"
+		, "game.combinations.none": "No valid combinations for this selection"
+		, "game.combinations.actions": "Actions"
+		, "game.combinations.board": "Board combinations"
+		, "game.combinations.current": "This construction"
+		, "game.combinations.basic": "{result} · {count} gems → +{upgrade} · max level {level}"
+		, "game.combinations.one_shot": "One Shot"
+		, "game.combinations.advanced": "Advanced"
+		, "game.combinations.max_level": "max level {level}"
+		, "game.combinations.secret": "(discovered secret)"
+		, "game.combinations.confirm": "Confirm"
+		, "game.combinations.cancel": "Cancel"
+		, "game.combinations.skip": "Do not combine"
+		, "game.combinations.select": "Select a combination"
+    }, true)
+    _catalog["es"].merge({
+        "game.player.level": "Nivel {level}",
+        "game.player.xp": "XP {xp} / próximo {next}",
+        "game.zoom": "Zoom",
+        "game.inspector.tower.title": "Torre seleccionada",
+        "game.inspector.enemy.title": "Enemigo seleccionado",
+        "game.inspector.stone.title": "Piedra seleccionada",
+        "game.inspector.tower.stats": "• Nivel: {level}\n• Daño: {damage}\n• Rango: {range}\n• Velocidad de ataque: {speed}\n• Habilidades: {abilities}",
+        "game.inspector.enemy.stats": "• HP: {hp} / {max_hp}\n• Armadura: {armor}\n• Resistencia mágica: {magic}"
+		, "game.inspector.combinations.none": "• No hay combinaciones válidas para esta selección"
+		, "game.inspector.combinations.available": "• Combinaciones disponibles: {list}"
+		, "game.combinations.title": "Combinaciones disponibles"
+		, "game.combinations.none": "No hay combinaciones válidas para esta selección"
+		, "game.combinations.actions": "Acciones"
+		, "game.combinations.board": "Combinaciones del tablero"
+		, "game.combinations.current": "Esta construcción"
+		, "game.combinations.basic": "{result} · {count} gemas → +{upgrade} · nivel máximo {level}"
+		, "game.combinations.one_shot": "One Shot"
+		, "game.combinations.advanced": "Avanzada"
+		, "game.combinations.max_level": "nivel máximo {level}"
+		, "game.combinations.secret": "(secreta descubierta)"
+		, "game.combinations.confirm": "Confirmar"
+		, "game.combinations.cancel": "Cancelar"
+		, "game.combinations.skip": "No combinar"
+		, "game.combinations.select": "Seleccioná una combinación"
+    }, true)
 
 func _ready() -> void:
     load_local_preference()

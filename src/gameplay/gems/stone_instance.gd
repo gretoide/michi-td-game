@@ -9,4 +9,3 @@ func _init(source_id: StringName = &"", source_cell := Vector2i(-1, -1), source_
 	source_gem_id = source_id
 	cell = source_cell
 	round_id = source_round
-

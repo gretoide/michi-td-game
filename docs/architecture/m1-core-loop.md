@@ -5,6 +5,10 @@
 M1 introduce una partida nueva y descartable después de cualquier autenticación válida. `GameRuntime` compone una `GridModel` 36×36, el `MapLayout` canónico, navegación, fases y `WaveRuntime`; nunca restaura estado de gameplay desde la sesión de cuenta.
 
 La grilla usa 100 unidades por celda y mantiene estados free, occupied y blocked. El mapa carga las coordenadas canónicas `(5,3) → (5,19) → (32,19) → (32,5) → (19,5) → (19,32) → (33,32)` y reserva esas celdas para impedir construcción sin bloquear navegación. `GroundPathfinder` calcula cada segmento sobre vecinos ortogonales y permite ensayar una ocupación antes de confirmarla. Flying consume los mismos waypoints ordenados, pero avanza en línea directa e ignora ocupación.
+El endpoint `(33,32)` representa la llegada al castillo: la vista lo decora con
+`assets/art/gameplay/environment/landmarks/castle/castle_checkpoint.png`, anclando su
+entrada de madera al centro del checkpoint en la esquina inferior derecha, sin cambiar
+la coordenada ni las reglas de escape.
 
 `GamePhaseMachine` inicia en wave 1 / Construction, expone acciones permitidas y emite entradas/salidas observables. Una Construction resuelta inicia Combat; `WaveRuntime` genera enemigos cada segundo, conserva contadores pending/alive/resolved y completa únicamente cuando no quedan pendientes ni vivos.
 

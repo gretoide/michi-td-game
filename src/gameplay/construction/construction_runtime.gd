@@ -230,6 +230,64 @@ func find_advanced_matches() -> Array:
 	if phases == null or phases.phase != GamePhaseMachine.Phase.COMBAT: return []
 	return matcher.find_matches(recipes, board_gems, true)
 
+func find_construction_options(selected: GemInstance) -> Array:
+	if selected == null or phases == null or phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or placed_count() != MAX_PLACEMENTS: return []
+	var result: Array = []
+	for option in basic_combinations():
+		if selected in option.gems:
+			var basic: Dictionary = option.duplicate()
+			basic["kind"] = &"basic"
+			basic["pool"] = &"construction_current"
+			basic["result_id"] = selected.id
+			basic["max_required_level"] = selected.level + (1 if int(option.count) == 2 else 2)
+			result.append(basic)
+	for option in find_one_shot_matches():
+		if selected in option.gems:
+			var contextual: Dictionary = option.duplicate()
+			contextual["kind"] = &"recipe"
+			contextual["pool"] = &"construction_current"
+			contextual["one_shot"] = true
+			contextual["result_id"] = contextual.recipe.result_id
+			contextual["max_required_level"] = max_required_level(contextual.recipe)
+			result.append(contextual)
+	return result
+
+func find_board_options(selected: GemInstance) -> Array:
+	if selected == null or phases == null or phases.phase != GamePhaseMachine.Phase.COMBAT: return []
+	var result: Array = []
+	for option in find_advanced_matches():
+		if selected in option.gems:
+			var contextual: Dictionary = option.duplicate()
+			contextual["kind"] = &"recipe"
+			contextual["pool"] = &"board"
+			contextual["one_shot"] = false
+			contextual["result_id"] = contextual.recipe.result_id
+			contextual["max_required_level"] = max_required_level(contextual.recipe)
+			result.append(contextual)
+	return result
+
+func contextual_combinations(selected: GemInstance) -> Array:
+	if phases != null and phases.phase == GamePhaseMachine.Phase.CONSTRUCTION:
+		return find_construction_options(selected)
+	return find_board_options(selected)
+
+func execute_contextual_combination(selected: GemInstance, option: Dictionary = {}) -> GemInstance:
+	var options := contextual_combinations(selected)
+	if option.is_empty():
+		if options.is_empty(): return null
+		option = options[0]
+	if not options.has(option): return null
+	if option.get("kind") == &"basic":
+		return combine_basic(selected, int(option.get("count", 0)))
+	return execute_recipe(option.get("recipe") as RecipeDefinition, selected, bool(option.get("one_shot", false)))
+
+func max_required_level(recipe: RecipeDefinition) -> int:
+	if recipe == null: return 0
+	var maximum := 0
+	for ingredient in recipe.ingredients:
+		maximum = maxi(maximum, int(ingredient.get("level", 0)))
+	return maximum
+
 func execute_recipe(recipe: RecipeDefinition, selected: GemInstance, one_shot := false) -> GemInstance:
 	if recipe == null or selected == null: return null
 	if one_shot:

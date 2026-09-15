@@ -1,0 +1,168 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://src/gameplay/map/map_editor_root.gd" id="1_root"]
+[ext_resource type="Script" path="res://src/gameplay/map/map_editable_point.gd" id="2_point"]
+[ext_resource type="Script" path="res://src/gameplay/map/map_obstacle.gd" id="3_obstacle"]
+[ext_resource type="Script" path="res://src/gameplay/map/map_gem_marker.gd" id="4_gem"]
+[ext_resource type="Script" path="res://src/gameplay/map/map_decoration_marker.gd" id="5_deco"]
+[ext_resource type="Texture2D" path="res://assets/art/gameplay/environment/stones/stone_01.png" id="6_stone"]
+[ext_resource type="Texture2D" path="res://assets/art/gameplay/environment/vegetation/grass/3.png" id="7_grass"]
+[ext_resource type="Texture2D" path="res://assets/art/gameplay/environment/vegetation/bushes/2.png" id="8_bush"]
+[ext_resource type="Texture2D" path="res://assets/art/gameplay/environment/props/trees/Tree2.png" id="9_tree"]
+[ext_resource type="Texture2D" path="res://assets/art/gameplay/environment/landmarks/flag/1.png" id="10_flag"]
+[ext_resource type="Resource" path="res://data/gameplay/initial_map.tres" id="11_layout"]
+[ext_resource type="Texture2D" path="res://assets/art/gameplay/environment/spawner/spawn_monster.png" id="12_spawn"]
+[ext_resource type="Texture2D" path="res://assets/art/gameplay/environment/landmarks/castle/castle_checkpoint.png" id="13_castle"]
+
+[node name="Map" type="Node2D"]
+script = ExtResource("1_root")
+map_layout_resource = ExtResource("11_layout")
+
+[node name="Path" type="Node2D" parent="."]
+
+[node name="Spawn" type="Node2D" parent="Path"]
+position = Vector2(550, 350)
+script = ExtResource("2_point")
+cell = Vector2i(5, 3)
+point_label = "SPAWN"
+marker_radius = 24.0
+
+[node name="SpawnerVisual" type="Sprite2D" parent="Path/Spawn"]
+scale = Vector2(0.32, 0.32)
+texture = ExtResource("12_spawn")
+
+[node name="Checkpoints" type="Node2D" parent="Path"]
+
+[node name="CP01" type="Node2D" parent="Path/Checkpoints"]
+position = Vector2(550, 1950)
+script = ExtResource("2_point")
+cell = Vector2i(5, 19)
+point_label = "CP01"
+
+[node name="FlagVisual" type="Sprite2D" parent="Path/Checkpoints/CP01"]
+scale = Vector2(0.65, 0.65)
+texture = ExtResource("10_flag")
+
+[node name="CP02" type="Node2D" parent="Path/Checkpoints"]
+position = Vector2(3250, 1950)
+script = ExtResource("2_point")
+cell = Vector2i(32, 19)
+point_label = "CP02"
+
+[node name="FlagVisual" type="Sprite2D" parent="Path/Checkpoints/CP02"]
+scale = Vector2(0.65, 0.65)
+texture = ExtResource("10_flag")
+
+[node name="CP03" type="Node2D" parent="Path/Checkpoints"]
+position = Vector2(3250, 550)
+script = ExtResource("2_point")
+cell = Vector2i(32, 5)
+point_label = "CP03"
+
+[node name="FlagVisual" type="Sprite2D" parent="Path/Checkpoints/CP03"]
+scale = Vector2(0.65, 0.65)
+texture = ExtResource("10_flag")
+
+[node name="CP04" type="Node2D" parent="Path/Checkpoints"]
+position = Vector2(1950, 550)
+script = ExtResource("2_point")
+cell = Vector2i(19, 5)
+point_label = "CP04"
+
+[node name="FlagVisual" type="Sprite2D" parent="Path/Checkpoints/CP04"]
+scale = Vector2(0.65, 0.65)
+texture = ExtResource("10_flag")
+
+[node name="CP05" type="Node2D" parent="Path/Checkpoints"]
+position = Vector2(1950, 3250)
+script = ExtResource("2_point")
+cell = Vector2i(19, 32)
+point_label = "CP05"
+
+[node name="FlagVisual" type="Sprite2D" parent="Path/Checkpoints/CP05"]
+scale = Vector2(0.65, 0.65)
+texture = ExtResource("10_flag")
+
+[node name="Endpoint" type="Node2D" parent="Path"]
+position = Vector2(3350, 3250)
+script = ExtResource("2_point")
+cell = Vector2i(33, 32)
+point_label = "END"
+marker_radius = 24.0
+
+[node name="CastleVisual" type="Sprite2D" parent="Path/Endpoint"]
+scale = Vector2(0.16, 0.16)
+texture = ExtResource("13_castle")
+
+[node name="Obstacles" type="Node2D" parent="."]
+
+[node name="StoneNorth" type="Sprite2D" parent="Obstacles"]
+position = Vector2(1250, 850)
+scale = Vector2(0.8, 0.8)
+texture = ExtResource("6_stone")
+script = ExtResource("3_obstacle")
+cell = Vector2i(12, 8)
+sprite = ExtResource("6_stone")
+
+[node name="StoneWest" type="Sprite2D" parent="Obstacles"]
+position = Vector2(750, 2550)
+scale = Vector2(0.9, 0.9)
+texture = ExtResource("6_stone")
+script = ExtResource("3_obstacle")
+cell = Vector2i(7, 25)
+sprite = ExtResource("6_stone")
+
+[node name="StoneEast" type="Sprite2D" parent="Obstacles"]
+position = Vector2(2750, 1250)
+scale = Vector2(0.75, 0.75)
+texture = ExtResource("6_stone")
+script = ExtResource("3_obstacle")
+cell = Vector2i(27, 12)
+sprite = ExtResource("6_stone")
+
+[node name="Gems" type="Node2D" parent="."]
+
+[node name="RubyMarker" type="Sprite2D" parent="Gems"]
+position = Vector2(1450, 1450)
+scale = Vector2(0.55, 0.55)
+script = ExtResource("4_gem")
+cell = Vector2i(14, 14)
+gem_id = "ruby"
+level = 1
+
+[node name="SapphireMarker" type="Sprite2D" parent="Gems"]
+position = Vector2(2550, 2850)
+scale = Vector2(0.55, 0.55)
+script = ExtResource("4_gem")
+cell = Vector2i(25, 28)
+gem_id = "sapphire"
+level = 1
+
+[node name="Decorations" type="Node2D" parent="."]
+
+[node name="GrassNorth" type="Sprite2D" parent="Decorations"]
+position = Vector2(950, 950)
+scale = Vector2(0.8, 0.8)
+texture = ExtResource("7_grass")
+script = ExtResource("5_deco")
+cell = Vector2i(9, 9)
+sprite = ExtResource("7_grass")
+category = "grass"
+
+[node name="BushSouth" type="Sprite2D" parent="Decorations"]
+position = Vector2(2950, 2550)
+scale = Vector2(0.85, 0.85)
+texture = ExtResource("8_bush")
+script = ExtResource("5_deco")
+cell = Vector2i(29, 25)
+sprite = ExtResource("8_bush")
+category = "bush"
+
+[node name="TreeEast" type="Sprite2D" parent="Decorations"]
+position = Vector2(3450, 1450)
+scale = Vector2(0.75, 0.75)
+texture = ExtResource("9_tree")
+script = ExtResource("5_deco")
+cell = Vector2i(34, 14)
+sprite = ExtResource("9_tree")
+category = "tree"

@@ -5,7 +5,7 @@ func run(suite: FoundationTestSuite) -> void:
 	var layout := load("res://data/gameplay/initial_map.tres") as MapLayout
 	suite.expect_equal(layout.checkpoints.size(), 5, "map has five checkpoints")
 	suite.expect_equal(layout.spawn, Vector2i(5,3), "map uses canonical spawn")
-	suite.expect_equal(layout.endpoint, Vector2i(33,32), "map uses canonical endpoint")
+	suite.expect_equal(layout.endpoint, Vector2i(33,32), "map uses castle arrival endpoint")
 	suite.expect(layout.validate_for(grid).is_empty(), "canonical map fits the grid")
 	var pathfinder := GroundPathfinder.new(grid)
 	var direct := pathfinder.find_route(layout)
@@ -20,7 +20,7 @@ func run(suite: FoundationTestSuite) -> void:
 	var invalid_layout := MapLayout.new()
 	invalid_layout.spawn = Vector2i(-1,3)
 	invalid_layout.checkpoints = [Vector2i(5,19), Vector2i(5,19), Vector2i(32,5), Vector2i(19,5), Vector2i(19,32)]
-	invalid_layout.endpoint = Vector2i(33,32)
+	invalid_layout.endpoint = Vector2i(19,34)
 	var invalid_errors := invalid_layout.validate_for(GridModel.new())
 	suite.expect(not invalid_errors.is_empty(), "invalid or duplicated map coordinates report clear errors")
 	var flying := EnemyNavigator.flying_cells(layout)

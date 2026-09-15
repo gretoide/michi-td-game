@@ -1,6 +1,8 @@
 class_name GameplayView
 extends Control
 
+const MODAL_TITLE_FONT := preload("res://assets/fonts/anak_bijak.ttf")
+
 signal main_menu_requested
 signal logout_requested
 signal exit_requested
@@ -8,12 +10,27 @@ signal exit_requested
 const SelectionStateScript = preload("res://src/gameplay/ui/selection_state.gd")
 const CommandCardModelScript = preload("res://src/gameplay/ui/command_card_model.gd")
 const SettingsStoreScript = preload("res://src/gameplay/ui/settings_store.gd")
+const GemAssetLibraryScript = preload("res://src/gameplay/assets/gem_asset_library.gd")
+const GemAssetGalleryScript = preload("res://src/gameplay/ui/gem_asset_gallery.gd")
+const ENEMY_NECROMANCER_SHEET_PATH := "res://assets/art/gameplay/enemies/gatos_nigromantes/necromancer_cat.png"
+const ENEMY_NECROMANCER_ICON_PATH := "res://assets/art/gameplay/enemies/gatos_nigromantes/necromancer_cat_icon.png"
+const ENEMY_NORMAL_SHEET_PATH := "res://assets/art/gameplay/enemies/normal_enemies/necromancer_cat.png"
+const ENEMY_NORMAL_ICON_PATH := "res://assets/art/gameplay/enemies/normal_enemies/necromancer_cat_icon.png"
+const ENEMY_BOSS_SHEET_PATH := "res://assets/art/gameplay/enemies/boss/necromancer_cat_boss.png"
+const ENEMY_BOSS_ICON_PATH := "res://assets/art/gameplay/enemies/boss/necromancer_cat_boss_icon.png"
+const ENEMY_INVISIBLE_SHEET_PATH := "res://assets/art/gameplay/enemies/invisibles/invisible_cat_w8.png"
+const ENEMY_INVISIBLE_ICON_PATH := "res://assets/art/gameplay/enemies/invisibles/invisible_cat_w8_icon.png"
+const ENEMY_FALLBACK_SHEET_PATH := "res://assets/art/gameplay/enemies/pipo_nekonin027.png"
+const ENEMY_FALLBACK_ICON_PATH := "res://assets/art/gameplay/enemies/pipo_nekonin027.png"
 
 var runtime: GameRuntime
 var selection: SelectionState
 var command_model: CommandCardModel
 var settings: SettingsStore
+var gem_assets: GemAssetLibrary
 var map_view: MapDebugView
+var _enemy_sheet_cache: Dictionary = {}
+var _enemy_icon_cache: Dictionary = {}
 var wave_label: Label
 var life_bar: ProgressBar
 var life_value_label: Label
@@ -21,6 +38,11 @@ var _life_fill_style: StyleBoxFlat
 var _life_tween: Tween
 var _life_target_value := -1.0
 var gold_value_label: Label
+var player_level_label: Label
+var xp_bar: ProgressBar
+var xp_value_label: Label
+var progress_bar: ProgressBar
+var progress_value_label: Label
 var feedback_label: Label
 var feedback_key := "game.feedback.help"
 var help_button: Button
@@ -36,6 +58,7 @@ var recipes_overlay: PanelContainer
 var settings_overlay: PanelContainer
 var end_overlay: PanelContainer
 var debug_overlay: PanelContainer
+var gem_gallery: Control
 var pause_overlay: PanelContainer
 var exit_confirm_overlay: PanelContainer
 var music_slider: HSlider
@@ -49,10 +72,16 @@ var _missing_gem_texture_diagnostics := {}
 var _gem_nodes: Dictionary = {}
 var _help_overlay: PanelContainer
 var place_gem_mode := false
+var combination_popup: PanelContainer
+var combination_popup_arrow: Label
+var combination_dropdown: OptionButton
+var combination_options: Array = []
+var combination_selected_index := -1
 
 func setup(value: GameRuntime, shared_settings: SettingsStore = null) -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
     runtime = value
+    gem_assets = GemAssetLibraryScript.new()
     LocalizationService = get_node("/root/LocalizationService")
     selection = SelectionStateScript.new()
     command_model = CommandCardModelScript.new()
@@ -104,12 +133,12 @@ func setup(value: GameRuntime, shared_settings: SettingsStore = null) -> void:
         runtime.combat.projectile_created.connect(_on_projectile_created)
     if not runtime.outcome.life_changed.is_connected(_on_life_changed):
         runtime.outcome.life_changed.connect(_on_life_changed)
-    runtime.phases.phase_entered.connect(func(_phase): place_gem_mode = false; map_view.sync_gem_sprites(); _refresh_ui())
+    runtime.phases.phase_entered.connect(func(_phase): place_gem_mode = false; _close_combination_popup(); map_view.sync_gem_sprites(); _refresh_ui())
     runtime.outcome.victorious.connect(func(): _show_end(true))
     runtime.outcome.defeated.connect(func(): _show_end(false))
     runtime.support_rewards.reward_available.connect(_show_reward)
-    LocalizationService.locale_changed.connect(func(_locale): _refresh_ui(); _rebuild_command_card(); _refresh_open_overlays())
-    selection.changed.connect(func(): _refresh_ui(); _rebuild_command_card(); map_view.queue_redraw())
+    LocalizationService.locale_changed.connect(_on_gameplay_locale_changed)
+    selection.changed.connect(_on_gameplay_selection_changed)
     _refresh_ui()
     _rebuild_command_card()
     map_view.sync_gem_sprites()
@@ -121,6 +150,22 @@ func _process(delta: float) -> void:
         _refresh_ui()
         map_view.sync_gem_sprites()
         map_view.queue_redraw()
+
+func _on_gameplay_locale_changed(_locale: String) -> void:
+    var popup_gem := _selected_combination_gem() if is_instance_valid(combination_popup) else null
+    var popup_stone: Variant = selection.value if is_instance_valid(combination_popup) and selection.kind == SelectionState.Kind.STONE else null
+    _refresh_ui()
+    _rebuild_command_card()
+    _refresh_open_overlays()
+    if popup_gem != null: _open_combination_popup_for(popup_gem)
+    elif popup_stone is Vector2i: _open_stone_popup_for(popup_stone)
+
+func _on_gameplay_selection_changed() -> void:
+    _refresh_ui()
+    _rebuild_command_card()
+    map_view.queue_redraw()
+    if is_instance_valid(combination_popup) and _selected_combination_gem() == null:
+        _close_combination_popup()
 
 func _build_top_bar(parent: Control) -> void:
     var bar := PanelContainer.new()
@@ -140,13 +185,23 @@ func _build_top_bar(parent: Control) -> void:
     var gold_group := HBoxContainer.new(); gold_group.add_theme_constant_override("separation", 6); gold_group.custom_minimum_size = Vector2(84, 0); row.add_child(gold_group)
     gold_group.add_child(_hud_icon("gold", LocalizationService.tr_key("game.resources.gold")))
     gold_value_label = Label.new(); gold_value_label.add_theme_font_size_override("font_size", 17); gold_group.add_child(gold_value_label)
+    row.add_child(_hud_separator())
+    var xp_group := HBoxContainer.new(); xp_group.add_theme_constant_override("separation", 6); xp_group.custom_minimum_size = Vector2(230, 0); row.add_child(xp_group)
+    player_level_label = Label.new(); player_level_label.add_theme_font_size_override("font_size", 17); xp_group.add_child(player_level_label)
+    xp_bar = ProgressBar.new(); xp_bar.custom_minimum_size = Vector2(105, 18); xp_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER; xp_bar.show_percentage = false; xp_bar.add_theme_stylebox_override("background", _resource_bar_style(Color("4b3428"))); xp_bar.add_theme_stylebox_override("fill", _resource_bar_style(Color("9c7cff"))); xp_group.add_child(xp_bar)
+    xp_value_label = Label.new(); xp_value_label.custom_minimum_size = Vector2(82, 0); xp_value_label.add_theme_font_size_override("font_size", 14); xp_group.add_child(xp_value_label)
+    row.add_child(_hud_separator())
+    var progress_group := HBoxContainer.new(); progress_group.add_theme_constant_override("separation", 6); progress_group.custom_minimum_size = Vector2(190, 0); row.add_child(progress_group)
+    progress_group.add_child(_hud_icon("progress", LocalizationService.tr_key("game.player.progress")))
+    progress_bar = ProgressBar.new(); progress_bar.custom_minimum_size = Vector2(88, 18); progress_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER; progress_bar.show_percentage = false; progress_bar.add_theme_stylebox_override("background", _resource_bar_style(Color("4b3428"))); progress_bar.add_theme_stylebox_override("fill", _resource_bar_style(Color("d99b50"))); progress_group.add_child(progress_bar)
+    progress_value_label = Label.new(); progress_value_label.custom_minimum_size = Vector2(64, 0); progress_value_label.add_theme_font_size_override("font_size", 14); progress_group.add_child(progress_value_label)
     var spacer := Control.new()
     spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     row.add_child(spacer)
-    var pause := Button.new(); pause.text = "Ⅱ"; pause.custom_minimum_size = Vector2(42, 38); pause.tooltip_text = LocalizationService.tr_key("game.pause"); pause.process_mode = Node.PROCESS_MODE_ALWAYS; pause.pressed.connect(_toggle_pause); row.add_child(pause)
-    var settings_button := Button.new(); settings_button.icon = load("res://assets/ui/icons/gameplay/settings.png"); settings_button.expand_icon = true; settings_button.custom_minimum_size = Vector2(42, 38); settings_button.tooltip_text = LocalizationService.tr_key("game.settings.title"); settings_button.process_mode = Node.PROCESS_MODE_ALWAYS; settings_button.pressed.connect(_on_settings_pressed); row.add_child(settings_button)
-    var recipes_button := Button.new(); recipes_button.icon = load("res://assets/ui/icons/gameplay/recipes.png"); recipes_button.expand_icon = true; recipes_button.custom_minimum_size = Vector2(42, 38); recipes_button.tooltip_text = LocalizationService.tr_key("game.recipes.title"); recipes_button.process_mode = Node.PROCESS_MODE_ALWAYS; recipes_button.pressed.connect(_toggle_recipes); row.add_child(recipes_button)
-    var guide_button := Button.new(); guide_button.icon = load("res://assets/ui/icons/gameplay/help.png"); guide_button.expand_icon = true; guide_button.custom_minimum_size = Vector2(42, 38); guide_button.tooltip_text = LocalizationService.tr_key("game.help.title"); guide_button.process_mode = Node.PROCESS_MODE_ALWAYS; guide_button.pressed.connect(_toggle_help); row.add_child(guide_button)
+    var pause := Button.new(); pause.text = "Ⅱ"; pause.custom_minimum_size = Vector2(42, 38); pause.tooltip_text = LocalizationService.tr_key("game.pause"); pause.process_mode = Node.PROCESS_MODE_ALWAYS; _style_game_button(pause); pause.pressed.connect(_toggle_pause); row.add_child(pause)
+    var settings_button := Button.new(); settings_button.icon = load("res://assets/ui/icons/gameplay/settings.png"); settings_button.expand_icon = true; settings_button.custom_minimum_size = Vector2(42, 38); settings_button.tooltip_text = LocalizationService.tr_key("game.settings.title"); settings_button.process_mode = Node.PROCESS_MODE_ALWAYS; _style_game_button(settings_button); settings_button.pressed.connect(_on_settings_pressed); row.add_child(settings_button)
+    var recipes_button := Button.new(); recipes_button.icon = load("res://assets/ui/icons/gameplay/recipes.png"); recipes_button.expand_icon = true; recipes_button.custom_minimum_size = Vector2(42, 38); recipes_button.tooltip_text = LocalizationService.tr_key("game.recipes.title"); recipes_button.process_mode = Node.PROCESS_MODE_ALWAYS; _style_game_button(recipes_button); recipes_button.pressed.connect(_toggle_recipes); row.add_child(recipes_button)
+    var guide_button := Button.new(); guide_button.icon = load("res://assets/ui/icons/gameplay/help.png"); guide_button.expand_icon = true; guide_button.custom_minimum_size = Vector2(42, 38); guide_button.tooltip_text = LocalizationService.tr_key("game.help.title"); guide_button.process_mode = Node.PROCESS_MODE_ALWAYS; _style_game_button(guide_button); guide_button.pressed.connect(_toggle_help); row.add_child(guide_button)
 
 func _hud_separator() -> Label:
     var separator := Label.new()
@@ -294,7 +349,7 @@ func _build_inspector(parent: Control) -> void:
     inspector_column.add_theme_constant_override("separation", 6)
     inspector.add_child(inspector_column)
     inspector_title_label = Label.new()
-    inspector_title_label.text = "Torre seleccionada" if LocalizationService.locale == "es" else "Selected tower"
+    inspector_title_label.text = LocalizationService.tr_key("game.inspector.tower.title")
     inspector_title_label.add_theme_font_size_override("font_size", 14)
     inspector_title_label.add_theme_color_override("font_color", Color("fff3d6"))
     inspector_column.add_child(inspector_title_label)
@@ -306,7 +361,7 @@ func _build_inspector(parent: Control) -> void:
     inspector_header.custom_minimum_size = Vector2(0, 36)
     inspector_row.add_child(inspector_header)
     var icon_frame := PanelContainer.new()
-    icon_frame.custom_minimum_size = Vector2(32, 32)
+    icon_frame.custom_minimum_size = Vector2(48, 48)
     icon_frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     var icon_style := StyleBoxFlat.new()
     icon_style.bg_color = Color("5a321f")
@@ -320,7 +375,7 @@ func _build_inspector(parent: Control) -> void:
     icon_frame.add_theme_stylebox_override("panel", icon_style)
     inspector_header.add_child(icon_frame)
     inspector_icon = TextureRect.new()
-    inspector_icon.custom_minimum_size = Vector2(26, 26)
+    inspector_icon.custom_minimum_size = Vector2(40, 40)
     inspector_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     inspector_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     inspector_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -329,9 +384,10 @@ func _build_inspector(parent: Control) -> void:
     icon_frame.add_child(inspector_icon)
     inspector_name_label = RichTextLabel.new()
     inspector_name_label.bbcode_enabled = true
-    inspector_name_label.fit_content = false
+    inspector_name_label.fit_content = true
+    inspector_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     inspector_name_label.scroll_active = false
-    inspector_name_label.custom_minimum_size = Vector2(0, 32)
+    inspector_name_label.custom_minimum_size = Vector2(0, 0)
     inspector_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     inspector_name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     inspector_name_label.add_theme_font_size_override("normal_font_size", 17)
@@ -349,7 +405,7 @@ func _rebuild_command_card() -> void:
     if command_model == null or runtime == null: return
     command_model.rebuild(runtime, selection)
     var title := command_panel.get_node_or_null("VBoxContainer/Content/Title") as Label
-    if title != null: title.text = "Acciones" if LocalizationService.locale == "es" else "Actions"
+    if title != null: title.text = LocalizationService.tr_key("game.command.title")
     for i in command_buttons.size():
         var action: Dictionary = command_model.actions[i]
         command_buttons[i].text = _command_label(action.id)
@@ -357,7 +413,15 @@ func _rebuild_command_card() -> void:
         command_buttons[i].icon = load(icon_path) if not icon_path.is_empty() else null
         command_buttons[i].expand_icon = not icon_path.is_empty()
         command_buttons[i].disabled = not action.enabled
-        command_buttons[i].visible = action.get("visible", true)
+        command_buttons[i].visible = false
+    var sidebar_root := command_panel.get_child(0) as Control
+    if sidebar_root != null:
+        var content := sidebar_root.get_node_or_null("Content") as Control
+        if content != null:
+            var sidebar_title := content.get_node_or_null("Title") as Control
+            var grid := content.get_node_or_null("Grid") as Control
+            if sidebar_title != null: sidebar_title.visible = false
+            if grid != null: grid.visible = false
 
 func _command_label(id: String) -> String:
     return LocalizationService.tr_key("game.command." + id)
@@ -370,11 +434,16 @@ func _command_icon_path(id: String) -> String:
 
 func _execute_command(index: int) -> void:
     if index < 0 or index >= command_model.actions.size(): return
-    var id: String = command_model.actions[index].id
+    var action: Dictionary = command_model.actions[index]
+    if not action.get("visible", false) or not action.get("enabled", false): return
+    var id: String = action.id
     match id:
-        "place_gem": map_view.place_gem_at_hover()
+        "place_gem":
+            place_gem_mode = true
+            _set_feedback("game.feedback.place_hint")
+            map_view.sync_gem_sprites()
         "select_gem": _set_feedback("game.feedback.select_hint")
-        "combine": _combine_selected()
+        "combine": _open_combination_popup_for(_selected_combination_gem())
         "degrade": _degrade_selected()
         "remove_stone": _remove_selected_stone()
         "attack": _attack_selected()
@@ -400,6 +469,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
         if pause_overlay != null: _toggle_pause(); return
         if recipes_overlay != null: _close_overlay(recipes_overlay); recipes_overlay = null; return
         if settings_overlay != null: _close_settings(); return
+        if is_instance_valid(combination_popup):
+            _close_combination_popup()
+            return
         selection.clear(); return
     if event.keycode == KEY_F10: _toggle_debug(); return
     if event.keycode == KEY_R and event.ctrl_pressed: _restart(); return
@@ -408,11 +480,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
     if index >= 0: _execute_command(index)
 
 func _combine_selected() -> void:
-    if selection.kind != SelectionState.Kind.GEM: return
-    for option in runtime.construction.basic_combinations():
-        if selection.value in option.gems:
-            runtime.construction.combine_basic(selection.value, int(option.count)); return
-    _set_feedback("game.feedback.no_combination")
+    var gem := _selected_combination_gem()
+    if gem != null: _open_combination_popup_for(gem)
+
+func _selected_combination_gem() -> GemInstance:
+    if selection.is_empty(): return null
+    if selection.kind == SelectionState.Kind.GEM: return selection.value as GemInstance
+    if selection.kind == SelectionState.Kind.TOWER:
+        var tower := selection.value as TowerRuntime
+        return tower.gem if tower != null else null
+    return null
 
 func _degrade_selected() -> void:
     if selection.kind == SelectionState.Kind.GEM and runtime.construction.degrade(selection.value) == null: _set_feedback("game.feedback.invalid_action")
@@ -420,6 +497,218 @@ func _degrade_selected() -> void:
 func _set_feedback(key: String) -> void:
     feedback_key = key
     if is_instance_valid(feedback_label): feedback_label.text = LocalizationService.tr_key(feedback_key)
+
+func _can_open_gem_context_popup(gem: GemInstance) -> bool:
+    return CommandCardModelScript.can_open_gem_context_popup(runtime, gem)
+
+func _open_combination_popup_for(gem: GemInstance) -> void:
+    _close_combination_popup()
+    if not _can_open_gem_context_popup(gem): return
+    combination_options = runtime.construction.contextual_combinations(gem)
+    combination_selected_index = -1
+    combination_popup = PanelContainer.new()
+    combination_popup.name = "CombinationPopup"
+    combination_popup.z_index = 30
+    combination_popup.mouse_filter = Control.MOUSE_FILTER_STOP
+    combination_popup.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    combination_popup.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+    combination_popup.custom_minimum_size = Vector2(390, 0)
+    combination_popup.add_theme_stylebox_override("panel", _hud_panel())
+    var column := VBoxContainer.new()
+    column.add_theme_constant_override("separation", 5)
+    combination_popup.add_child(column)
+    var entity_header := HBoxContainer.new()
+    entity_header.add_theme_constant_override("separation", 8)
+    var entity_icon := TextureRect.new()
+    entity_icon.custom_minimum_size = Vector2(42, 42)
+    entity_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    entity_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    entity_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    entity_icon.texture = _gem_texture(gem.id, gem.level)
+    entity_header.add_child(entity_icon)
+    var entity_info := VBoxContainer.new()
+    var entity_name := Label.new()
+    entity_name.text = _quality_label(gem.quality) + " " + _display_gem_name(gem.id)
+    entity_name.add_theme_font_override("font", MODAL_TITLE_FONT)
+    entity_info.add_child(entity_name)
+    entity_header.add_child(entity_info)
+    column.add_child(entity_header)
+    var entity_stats := Label.new()
+    entity_stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    entity_stats.text = _combination_entity_stats(gem)
+    column.add_child(entity_stats)
+    column.add_child(HSeparator.new())
+    var title := Label.new()
+    title.text = LocalizationService.tr_key("game.combinations.title")
+    title.add_theme_font_size_override("font_size", 16)
+    title.add_theme_font_override("font", MODAL_TITLE_FONT)
+    column.add_child(title)
+    if combination_options.is_empty():
+        var empty := Label.new()
+        empty.text = LocalizationService.tr_key("game.combinations.none")
+        empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        column.add_child(empty)
+    if combination_options.size() > 1:
+        combination_dropdown = OptionButton.new()
+        combination_dropdown.name = "CombinationDropdown"
+        combination_dropdown.custom_minimum_size = Vector2(0, 40)
+        combination_dropdown.tooltip_text = LocalizationService.tr_key("game.combinations.select")
+        for index in combination_options.size():
+            var option: Dictionary = combination_options[index]
+            combination_dropdown.add_item(_combination_option_label(option))
+            combination_dropdown.set_item_metadata(index, index)
+        combination_dropdown.item_selected.connect(_select_combination_option)
+        column.add_child(combination_dropdown)
+    elif combination_options.size() == 1:
+        var single_option := Label.new()
+        single_option.name = "SingleCombination"
+        single_option.text = _combination_option_label(combination_options[0])
+        single_option.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        single_option.add_theme_stylebox_override("normal", _inner_panel())
+        column.add_child(single_option)
+    _append_popup_actions(column)
+    if not combination_options.is_empty():
+        combination_selected_index = 0
+        if is_instance_valid(combination_dropdown): combination_dropdown.select(0)
+    add_child(combination_popup)
+    combination_popup_arrow = Label.new()
+    combination_popup_arrow.text = "◀"
+    combination_popup_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    combination_popup_arrow.z_index = 31
+    combination_popup_arrow.add_theme_font_size_override("font_size", 24)
+    add_child(combination_popup_arrow)
+    _position_context_popup(gem.cell)
+
+func _open_stone_popup_for(cell: Vector2i) -> void:
+    _close_combination_popup()
+    if runtime == null or not runtime.construction.stones.has(cell): return
+    combination_popup = PanelContainer.new()
+    combination_popup.name = "StoneActionPopup"
+    combination_popup.z_index = 30
+    combination_popup.mouse_filter = Control.MOUSE_FILTER_STOP
+    combination_popup.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    combination_popup.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+    combination_popup.custom_minimum_size = Vector2(300, 0)
+    combination_popup.add_theme_stylebox_override("panel", _hud_panel())
+    var column := VBoxContainer.new()
+    column.add_theme_constant_override("separation", 7)
+    combination_popup.add_child(column)
+    var entity_header := HBoxContainer.new()
+    entity_header.add_theme_constant_override("separation", 8)
+    var entity_icon := TextureRect.new()
+    entity_icon.custom_minimum_size = Vector2(42, 42)
+    entity_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    entity_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    entity_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    entity_icon.texture = _stone_icon_texture()
+    entity_header.add_child(entity_icon)
+    var entity_name := Label.new()
+    entity_name.text = LocalizationService.tr_key("game.selection.stone")
+    entity_name.add_theme_font_override("font", MODAL_TITLE_FONT)
+    entity_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    entity_header.add_child(entity_name)
+    column.add_child(entity_header)
+    column.add_child(HSeparator.new())
+    _append_popup_actions(column)
+    add_child(combination_popup)
+    combination_popup_arrow = Label.new()
+    combination_popup_arrow.text = "◀"
+    combination_popup_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    combination_popup_arrow.z_index = 31
+    combination_popup_arrow.add_theme_font_size_override("font_size", 24)
+    add_child(combination_popup_arrow)
+    _position_context_popup(cell)
+
+func _append_popup_actions(column: VBoxContainer) -> void:
+    var action_header := Label.new()
+    action_header.text = LocalizationService.tr_key("game.combinations.actions")
+    action_header.add_theme_font_size_override("font_size", 15)
+    action_header.add_theme_font_override("font", MODAL_TITLE_FONT)
+    column.add_child(action_header)
+    for index in command_model.actions.size():
+        var action: Dictionary = command_model.actions[index]
+        var id: String = action.id
+        if not action.get("visible", false): continue
+        if id == "combine" and combination_options.is_empty(): continue
+        var button := Button.new()
+        button.text = _command_label(id)
+        button.custom_minimum_size = Vector2(0, 36)
+        button.disabled = not action.get("enabled", false)
+        _style_game_button(button)
+        if id == "combine":
+            button.pressed.connect(_confirm_combination_option)
+        else:
+            var action_index := index
+            button.pressed.connect(func(): _popup_action_pressed(action_index))
+        column.add_child(button)
+
+func _popup_action_pressed(index: int) -> void:
+    _close_combination_popup()
+    _execute_command(index)
+
+func _combination_entity_stats(gem: GemInstance) -> String:
+    var definition := runtime.foundation.catalog.gem_definition_for_id(gem.id) as GemDefinition
+    var stats := TowerCombatStats.from_gem(gem, definition)
+    return LocalizationService.tr_key("game.inspector.tower.stats", {"level": gem.level, "damage": "%.1f" % stats.damage, "range": "%.1f" % stats.range_units, "speed": "%.1f" % stats.total_attack_speed(), "abilities": _gem_abilities(gem)})
+
+func _combination_option_label(option: Dictionary) -> String:
+    var result_id: StringName = option.get("result_id", &"")
+    var result_name := _display_gem_name(result_id)
+    var maximum := int(option.get("max_required_level", 0))
+    if option.get("kind") == &"basic":
+        var upgrade := 1 if int(option.get("count", 0)) == 2 else 2
+        return LocalizationService.tr_key("game.combinations.basic", {"result": result_name, "count": option.get("count", 0), "upgrade": upgrade, "level": maximum})
+    var recipe := option.get("recipe") as RecipeDefinition
+    var secret_suffix: String = "" if recipe == null or not recipe.secret else " " + LocalizationService.tr_key("game.combinations.secret")
+    var type_key: String = "game.combinations.one_shot" if option.get("one_shot", false) else "game.combinations.advanced"
+    return "%s%s · %s · %s" % [result_name, secret_suffix, LocalizationService.tr_key(type_key), LocalizationService.tr_key("game.combinations.max_level", {"level": maximum})]
+
+func _select_combination_option(index: int) -> void:
+    combination_selected_index = index
+
+func _confirm_combination_option() -> void:
+    if combination_selected_index < 0 or combination_selected_index >= combination_options.size(): return
+    var selected := _selected_combination_gem()
+    if selected == null: return
+    var result := runtime.construction.execute_contextual_combination(selected, combination_options[combination_selected_index])
+    if result == null:
+        _set_feedback("game.feedback.invalid_action")
+        return
+    _close_combination_popup()
+    selection.clear()
+    _refresh_ui()
+
+func _close_combination_popup() -> void:
+    if is_instance_valid(combination_popup): combination_popup.queue_free()
+    if is_instance_valid(combination_popup_arrow): combination_popup_arrow.queue_free()
+    combination_popup = null
+    combination_popup_arrow = null
+    combination_dropdown = null
+    combination_options.clear()
+    combination_selected_index = -1
+
+func _close_context_popup_for_camera_change() -> void:
+    # Camera movement invalidates the popup anchor. Clear only presentation
+    # state; gameplay entities, ingredients and grid occupancy are untouched.
+    _close_combination_popup()
+    if selection != null and not selection.is_empty(): selection.clear()
+
+func _position_context_popup(cell: Vector2i) -> void:
+    if not is_instance_valid(combination_popup) or map_view == null: return
+    var anchor: Vector2 = map_view.global_position_for_cell(cell) - global_position
+    combination_popup.position = anchor + Vector2(32.0, -combination_popup.size.y * 0.5)
+    call_deferred("_clamp_combination_popup", anchor)
+
+func _clamp_combination_popup(anchor: Vector2 = Vector2.ZERO) -> void:
+    if not is_instance_valid(combination_popup): return
+    var popup_minimum := combination_popup.get_combined_minimum_size()
+    combination_popup.size = Vector2(maxf(390.0, popup_minimum.x), popup_minimum.y)
+    var viewport_size := size
+    combination_popup.position.y = anchor.y - combination_popup.size.y * 0.5
+    combination_popup.position.x = clampf(combination_popup.position.x, 4.0, maxf(4.0, viewport_size.x - combination_popup.size.x - 4.0))
+    combination_popup.position.y = clampf(combination_popup.position.y, 4.0, maxf(4.0, viewport_size.y - combination_popup.size.y - 4.0))
+    if is_instance_valid(combination_popup_arrow):
+        combination_popup_arrow.position = Vector2(combination_popup.position.x - 18.0, clampf(anchor.y - 12.0, combination_popup.position.y + 12.0, combination_popup.position.y + combination_popup.size.y - 30.0))
 
 func _attack_selected() -> void:
     if selection.kind != SelectionState.Kind.TOWER: return
@@ -442,7 +731,7 @@ func _remove_selected_stone() -> void:
 
 func _toggle_recipes() -> void:
     if recipes_overlay != null: _close_overlay(recipes_overlay); recipes_overlay = null; return
-    recipes_overlay = _make_parchment_overlay(LocalizationService.tr_key("game.recipes.title"), Vector2(780, 0), func(): _close_overlay(recipes_overlay); recipes_overlay = null)
+    recipes_overlay = _make_parchment_overlay(LocalizationService.tr_key("game.recipes.title"), Vector2(1280, 0), func(): _close_overlay(recipes_overlay); recipes_overlay = null)
     var column := _parchment_overlay_column(recipes_overlay)
     column.add_theme_constant_override("separation", 12)
     var search := LineEdit.new()
@@ -472,13 +761,13 @@ func _toggle_recipes() -> void:
     list_margin.add_theme_constant_override("margin_bottom", 8)
     list_panel.add_child(list_margin)
     var scroll := ScrollContainer.new()
-    scroll.custom_minimum_size = Vector2(680, 430)
+    scroll.custom_minimum_size = Vector2(1160, 560)
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     list_margin.add_child(scroll)
     _style_modal_scrollbar(scroll.get_v_scroll_bar())
-    recipe_rows = GridContainer.new(); recipe_rows.columns = 3; recipe_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL; recipe_rows.add_theme_constant_override("h_separation", 8); recipe_rows.add_theme_constant_override("v_separation", 8); scroll.add_child(recipe_rows)
+    recipe_rows = GridContainer.new(); recipe_rows.columns = 4; recipe_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL; recipe_rows.add_theme_constant_override("h_separation", 8); recipe_rows.add_theme_constant_override("v_separation", 8); scroll.add_child(recipe_rows)
     _populate_recipes()
     add_child(recipes_overlay)
 
@@ -489,7 +778,7 @@ func _show_reward(wave_number: int, candidates: Array) -> void:
         var id: StringName = candidates[i]
         var picked_id := id
         var reward_name: String = LocalizationService.tr_key("game.reward.skill.%s" % str(picked_id))
-        var button := Button.new(); button.text = "%d. %s" % [i + 1, reward_name]; button.custom_minimum_size = Vector2(320, 42); button.pressed.connect(func(): runtime.support_rewards.choose(picked_id); _close_overlay(reward_overlay); reward_overlay = null; get_tree().paused = false); column.add_child(button)
+        var button := Button.new(); button.text = "%d. %s" % [i + 1, reward_name]; button.custom_minimum_size = Vector2(320, 42); _style_modal_action_button(button); button.process_mode = Node.PROCESS_MODE_ALWAYS; button.pressed.connect(func(): runtime.support_rewards.choose(picked_id); _close_overlay(reward_overlay); reward_overlay = null; get_tree().paused = false); column.add_child(button)
     var close := _close_icon_button(func(): _close_overlay(reward_overlay); reward_overlay = null; get_tree().paused = false); column.add_child(close); column.move_child(close, 0)
     add_child(reward_overlay)
     get_tree().paused = true
@@ -498,7 +787,7 @@ func _show_end(victory: bool) -> void:
     end_overlay = _make_overlay(LocalizationService.tr_key("game.end.victory" if victory else "game.end.defeat"))
     var column := _overlay_column(end_overlay)
     var score := Label.new(); score.text = LocalizationService.tr_key("game.end.score", {"score": runtime.player_state.score}); column.add_child(score)
-    var restart := Button.new(); restart.text = LocalizationService.tr_key("game.restart"); restart.pressed.connect(_restart); column.add_child(restart)
+    var restart := Button.new(); restart.text = LocalizationService.tr_key("game.restart"); _style_modal_action_button(restart, true); restart.process_mode = Node.PROCESS_MODE_ALWAYS; restart.pressed.connect(_restart); column.add_child(restart)
     add_child(end_overlay); get_tree().paused = true
 
 func _toggle_settings() -> void:
@@ -577,6 +866,7 @@ func _settings_toggle_row(label_text: String, current_value: bool, callback: Cal
     toggle.custom_minimum_size = Vector2(54, 34)
     toggle.button_pressed = current_value
     toggle.tooltip_text = label_text
+    CursorManager.set_clickable(toggle)
     toggle.toggled.connect(callback)
     row.add_child(toggle)
     return panel
@@ -633,11 +923,29 @@ func _settings_grabber() -> Texture2D:
     return ImageTexture.create_from_image(image)
 
 func _toggle_debug() -> void:
+    if gem_gallery != null:
+        gem_gallery.queue_free(); gem_gallery = null; return
     if debug_overlay != null: _close_overlay(debug_overlay); debug_overlay = null; return
     debug_overlay = _make_overlay(LocalizationService.tr_key("game.debug.title"))
     var column := _overlay_column(debug_overlay)
     var info := Label.new(); info.text = LocalizationService.tr_key("game.debug.info", {"seed": runtime.foundation.random.effective_seed, "gems": runtime.foundation.catalog.gems.size(), "recipes": runtime.foundation.catalog.recipes.size(), "waves": runtime.foundation.catalog.waves.size()}); column.add_child(info)
+    var gallery_button := Button.new()
+    gallery_button.text = "Base gem/tower gallery"
+    gallery_button.custom_minimum_size = Vector2(0, 40)
+    _style_game_button(gallery_button)
+    gallery_button.pressed.connect(_open_gem_gallery)
+    column.add_child(gallery_button)
     var close := _close_icon_button(func(): _close_overlay(debug_overlay); debug_overlay = null); column.add_child(close); column.move_child(close, 0); add_child(debug_overlay)
+
+func _open_gem_gallery() -> void:
+    if gem_gallery != null: return
+    if debug_overlay != null: _close_overlay(debug_overlay); debug_overlay = null
+    gem_gallery = GemAssetGalleryScript.new()
+    gem_gallery.setup(gem_assets, func():
+        if is_instance_valid(gem_gallery): gem_gallery.queue_free()
+        gem_gallery = null
+    )
+    add_child(gem_gallery)
 
 func _restart() -> void:
     if runtime == null or runtime.phases.phase != GamePhaseMachine.Phase.CONSTRUCTION: return
@@ -657,24 +965,39 @@ func _populate_recipes() -> void:
         if recipe_filter == 2 and recipe.result_id in runtime.foundation.catalog.gems.map(func(g): return g.id): continue
         if not recipe_color_filter.is_empty() and _gem_color_key(recipe.result_id) != recipe_color_filter: continue
         var row_panel := PanelContainer.new()
-        row_panel.custom_minimum_size = Vector2(220, 92)
+        row_panel.custom_minimum_size = Vector2(280, 128)
         row_panel.add_theme_stylebox_override("panel", _recipe_row_style(shown % 2 == 1))
         recipe_rows.add_child(row_panel)
         var row_margin := MarginContainer.new()
         row_margin.add_theme_constant_override("margin_left", 10)
         row_margin.add_theme_constant_override("margin_right", 10)
         row_panel.add_child(row_margin)
-        var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); row_margin.add_child(row)
-        _add_gem_icon(row, recipe.result_id, 1, 30)
-        var label := Label.new()
-        var ingredients := []
-        for ingredient in recipe.ingredients:
-            ingredients.append("%s L%s" % [_display_gem_name(ingredient["id"]), ingredient.get("level", 1)])
-        label.text = "%s = %s\n%s" % [_display_gem_name(recipe.result_id), " + ".join(ingredients), _display_gem_name(recipe.id)]
-        label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; label.add_theme_font_size_override("font_size", 14); label.add_theme_color_override("font_color", Color("3b2418")); row.add_child(label)
+        var recipe_column := VBoxContainer.new(); recipe_column.add_theme_constant_override("separation", 4); row_margin.add_child(recipe_column)
+        var result_row := HBoxContainer.new(); result_row.add_theme_constant_override("separation", 6); recipe_column.add_child(result_row)
+        _add_gem_icon(result_row, recipe.result_id, 1, 30)
+        var result_label := Label.new(); result_label.text = _display_gem_name(recipe.result_id); result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; result_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; result_label.add_theme_color_override("font_color", Color("3b2418")); result_row.add_child(result_label)
+        var formula := HBoxContainer.new(); formula.add_theme_constant_override("separation", 3); recipe_column.add_child(formula)
+        for index in recipe.ingredients.size():
+            if index > 0:
+                var plus := Label.new(); plus.text = "+"; plus.add_theme_color_override("font_color", Color("6d4a32")); formula.add_child(plus)
+            var ingredient: Dictionary = recipe.ingredients[index]
+            var chip := Label.new(); chip.text = "%s L%s" % [_display_gem_name(ingredient["id"]), ingredient.get("level", 1)]; chip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL; chip.add_theme_color_override("font_color", Color("3b2418")); chip.add_theme_stylebox_override("normal", _recipe_reference_style(_recipe_reference_state(StringName(ingredient["id"]), int(ingredient.get("level", 1))))); formula.add_child(chip)
+        var recipe_label := Label.new(); recipe_label.text = "= %s" % _display_gem_name(recipe.id); recipe_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; recipe_label.add_theme_color_override("font_color", Color("6d4a32")); recipe_column.add_child(recipe_label)
         shown += 1
     if shown == 0:
         var empty := Label.new(); empty.text = LocalizationService.tr_key("game.help.empty"); empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; empty.add_theme_color_override("font_color", Color("6d4a32")); empty.custom_minimum_size = Vector2(0, 72); empty.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; recipe_rows.add_child(empty)
+
+func _recipe_reference_state(gem_id: StringName, level: int) -> int:
+    var in_field := false
+    for gem: GemInstance in runtime.construction.board_gems:
+        if gem not in runtime.construction.current_gems and gem.id == gem_id and gem.level == level: in_field = true; break
+    var in_construction := false
+    for gem: GemInstance in runtime.construction.available_gems:
+        if gem.id == gem_id and gem.level == level: in_construction = true; break
+    return (2 if in_field else 0) + (1 if in_construction else 0)
+
+func _recipe_reference_style(state: int) -> StyleBoxFlat:
+    var style := StyleBoxFlat.new(); style.bg_color = Color("dedede") if state in [2, 3] else Color(0.0, 0.0, 0.0, 0.08); style.border_color = Color.WHITE; style.set_border_width_all(2 if state in [1, 3] else 0); style.set_corner_radius_all(3); style.content_margin_left = 3; style.content_margin_right = 3; style.content_margin_top = 2; style.content_margin_bottom = 2; return style
 
 func _toggle_pause() -> void:
     if pause_overlay != null:
@@ -704,8 +1027,8 @@ func _show_exit_confirmation(logout: bool) -> void:
     var column := _overlay_column(exit_confirm_overlay)
     column.add_child(_close_icon_button(func(): _close_exit_confirmation()))
     var message := Label.new(); message.text = LocalizationService.tr_key("game.pause.confirm_message"); message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; column.add_child(message)
-    var confirm := Button.new(); confirm.text = LocalizationService.tr_key("game.pause.confirm"); confirm.process_mode = Node.PROCESS_MODE_ALWAYS; confirm.pressed.connect(func(): _confirm_exit(logout)); column.add_child(confirm)
-    var cancel := Button.new(); cancel.text = LocalizationService.tr_key("game.pause.cancel"); cancel.process_mode = Node.PROCESS_MODE_ALWAYS; cancel.pressed.connect(_close_exit_confirmation); column.add_child(cancel)
+    var confirm := Button.new(); confirm.text = LocalizationService.tr_key("game.pause.confirm"); confirm.process_mode = Node.PROCESS_MODE_ALWAYS; _style_modal_action_button(confirm, true); confirm.pressed.connect(func(): _confirm_exit(logout)); column.add_child(confirm)
+    var cancel := Button.new(); cancel.text = LocalizationService.tr_key("game.pause.cancel"); cancel.process_mode = Node.PROCESS_MODE_ALWAYS; _style_modal_action_button(cancel); cancel.pressed.connect(_close_exit_confirmation); column.add_child(cancel)
     add_child(exit_confirm_overlay)
 
 func _show_quit_confirmation() -> void:
@@ -714,8 +1037,8 @@ func _show_quit_confirmation() -> void:
     var column := _overlay_column(exit_confirm_overlay)
     column.add_child(_close_icon_button(func(): _close_exit_confirmation()))
     var message := Label.new(); message.text = LocalizationService.tr_key("game.pause.confirm_message"); message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; column.add_child(message)
-    var confirm := Button.new(); confirm.text = LocalizationService.tr_key("game.pause.confirm"); confirm.process_mode = Node.PROCESS_MODE_ALWAYS; confirm.pressed.connect(_confirm_quit); column.add_child(confirm)
-    var cancel := Button.new(); cancel.text = LocalizationService.tr_key("game.pause.cancel"); cancel.process_mode = Node.PROCESS_MODE_ALWAYS; cancel.pressed.connect(_close_exit_confirmation); column.add_child(cancel)
+    var confirm := Button.new(); confirm.text = LocalizationService.tr_key("game.pause.confirm"); confirm.process_mode = Node.PROCESS_MODE_ALWAYS; _style_modal_action_button(confirm, true); confirm.pressed.connect(_confirm_quit); column.add_child(confirm)
+    var cancel := Button.new(); cancel.text = LocalizationService.tr_key("game.pause.cancel"); cancel.process_mode = Node.PROCESS_MODE_ALWAYS; _style_modal_action_button(cancel); cancel.pressed.connect(_close_exit_confirmation); column.add_child(cancel)
     add_child(exit_confirm_overlay)
 
 func _close_exit_confirmation() -> void:
@@ -759,7 +1082,7 @@ func _fallback_gem_texture(gem_id: StringName) -> Texture2D:
             if distance <= 5.0: image.set_pixel(x, y, color)
     return ImageTexture.create_from_image(image)
 
-func _gem_texture(gem_id: StringName, level: int) -> Texture2D:
+func _legacy_gem_texture(gem_id: StringName, level: int) -> Texture2D:
     var color := _gem_color_key(gem_id)
     var family := clampi(level, 1, 10)
     var path := "res://assets/art/gameplay/gems/%s/gem_%d_%s.png" % [color, family, color]
@@ -768,6 +1091,14 @@ func _gem_texture(gem_id: StringName, level: int) -> Texture2D:
         _missing_gem_texture_diagnostics[path] = true
         push_warning("Missing gem texture: %s" % path)
     return texture
+
+func _gem_texture(gem_id: StringName, level: int) -> Texture2D:
+    var base_texture := gem_assets.get_gem_texture(gem_id, level) if gem_assets != null else null
+    return base_texture if base_texture != null else _legacy_gem_texture(gem_id, level)
+
+func _tower_texture(gem_id: StringName, level: int) -> Texture2D:
+    var base_texture := gem_assets.get_tower_texture(gem_id, level) if gem_assets != null else null
+    return base_texture if base_texture != null else _legacy_gem_texture(gem_id, level)
 
 func _gem_animation_texture(gem_id: StringName, level: int, frame: int) -> Texture2D:
     var color := _gem_color_key(gem_id)
@@ -803,6 +1134,7 @@ func _close_icon_button(callback: Callable) -> Button:
     close.mouse_filter = Control.MOUSE_FILTER_STOP
     close.process_mode = Node.PROCESS_MODE_ALWAYS
     close.tooltip_text = LocalizationService.tr_key("game.close")
+    _style_modal_close_button(close)
     close.pressed.connect(callback)
     return close
 
@@ -1133,6 +1465,7 @@ func _make_parchment_overlay(title_text: String, minimum_size: Vector2, close_ca
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     title.add_theme_font_size_override("font_size", 24)
+    title.add_theme_font_override("font", MODAL_TITLE_FONT)
     title.add_theme_color_override("font_color", Color("fff3d6"))
     header_row.add_child(title)
     var close := _close_icon_button(close_callback)
@@ -1183,6 +1516,7 @@ func _make_overlay(title_text: String) -> PanelContainer:
     title.text = title_text
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     title.add_theme_font_size_override("font_size", 22)
+    title.add_theme_font_override("font", MODAL_TITLE_FONT)
     column.add_child(title)
     return overlay
 
@@ -1223,8 +1557,17 @@ func _refresh_ui() -> void:
         if is_instance_valid(_life_fill_style): _life_fill_style.bg_color = _life_bar_color(target / life_bar.max_value)
     if is_instance_valid(life_value_label): life_value_label.text = "%d/%d" % [runtime.player_state.lives, runtime.player_state.max_lives]
     if is_instance_valid(gold_value_label): gold_value_label.text = str(runtime.player_state.gold)
+    if is_instance_valid(player_level_label) and runtime.progression != null:
+        player_level_label.text = LocalizationService.tr_key("game.player.level", {"level": runtime.progression.quality_level})
+    if is_instance_valid(xp_bar) and runtime.progression != null:
+        xp_bar.value = runtime.progression.progress_ratio() * 100.0
+        xp_bar.tooltip_text = LocalizationService.tr_key("game.player.xp", {"xp": runtime.progression.xp, "next": runtime.progression.next_level_threshold()})
+    if is_instance_valid(xp_value_label) and runtime.progression != null:
+        xp_value_label.text = "%d%%" % roundi(runtime.progression.progress_ratio() * 100.0)
+    if is_instance_valid(progress_bar): progress_bar.value = clampf(float(runtime.player_state.progress), 0.0, 100.0)
+    if is_instance_valid(progress_value_label): progress_value_label.text = "%.2f%%" % float(runtime.player_state.progress)
     _refresh_inspector_content()
-    if is_instance_valid(inspector_panel): inspector_panel.visible = not selection.is_empty()
+    if is_instance_valid(inspector_panel): inspector_panel.visible = false
     if is_instance_valid(inspector_icon):
         inspector_icon.texture = null
         if selection.kind == SelectionState.Kind.GEM:
@@ -1232,17 +1575,66 @@ func _refresh_ui() -> void:
             inspector_icon.texture = _gem_texture(selected_gem.id, selected_gem.level)
         elif selection.kind == SelectionState.Kind.TOWER:
             var selected_tower: TowerRuntime = selection.value
-            inspector_icon.texture = _gem_texture(selected_tower.id, selected_tower.gem.level if selected_tower.gem != null else 1)
+            inspector_icon.texture = _tower_texture(selected_tower.id, selected_tower.gem.level if selected_tower.gem != null else 1)
         elif selection.kind == SelectionState.Kind.ENEMY:
-            inspector_icon.texture = _enemy_icon_texture()
+            var selected_enemy: EnemyRuntime = selection.value
+            inspector_icon.texture = _enemy_icon_texture(selected_enemy.profile_id, runtime.current_wave_is_boss)
         elif selection.kind == SelectionState.Kind.STONE:
             inspector_icon.texture = _stone_icon_texture()
 
-func _enemy_icon_texture() -> Texture2D:
-    var atlas := AtlasTexture.new()
-    atlas.atlas = load("res://assets/art/gameplay/enemies/pipo_nekonin027.png") as Texture2D
-    atlas.region = Rect2(0, 0, 32, 32)
-    return atlas
+func _enemy_sheet_path(profile_id: StringName, boss: bool = false) -> String:
+    var preferred := ENEMY_NORMAL_SHEET_PATH
+    if boss or profile_id == &"invincible_dog_w10": preferred = ENEMY_BOSS_SHEET_PATH
+    elif profile_id == &"invisible_spider_w8": preferred = ENEMY_INVISIBLE_SHEET_PATH
+    elif profile_id == &"frenzied_pig": preferred = ENEMY_NECROMANCER_SHEET_PATH
+    return preferred if ResourceLoader.exists(preferred) else ENEMY_FALLBACK_SHEET_PATH
+
+func _enemy_direction_row(direction: Vector2, boss: bool) -> int:
+    if absf(direction.x) > absf(direction.y):
+        # The normal/necromancer sheets place left-facing frames on row 1
+        # and right-facing frames on row 2. The boss sheet uses the reverse
+        # order, so keep its existing mapping explicit.
+        if boss: return 2 if direction.x < 0.0 else 1
+        return 1 if direction.x < 0.0 else 2
+    return 3 if direction.y < 0.0 else 0
+
+func _enemy_icon_path(profile_id: StringName, boss: bool = false) -> String:
+    var preferred := ENEMY_NORMAL_ICON_PATH
+    if boss or profile_id == &"invincible_dog_w10": preferred = ENEMY_BOSS_ICON_PATH
+    elif profile_id == &"invisible_spider_w8": preferred = ENEMY_INVISIBLE_ICON_PATH
+    elif profile_id == &"frenzied_pig": preferred = ENEMY_NECROMANCER_ICON_PATH
+    return preferred if ResourceLoader.exists(preferred) else ENEMY_FALLBACK_ICON_PATH
+
+func _enemy_sheet(profile_id: StringName, boss: bool = false) -> Texture2D:
+    var path := _enemy_sheet_path(profile_id, boss)
+    if _enemy_sheet_cache.has(path): return _enemy_sheet_cache[path] as Texture2D
+    var requested_path := path
+    var texture := load(path) as Texture2D
+    if texture == null and path != ENEMY_FALLBACK_SHEET_PATH:
+        path = ENEMY_FALLBACK_SHEET_PATH
+        texture = load(path) as Texture2D
+    if texture != null:
+        _enemy_sheet_cache[requested_path] = texture
+        _enemy_sheet_cache[path] = texture
+    return texture
+
+func _enemy_icon_texture(profile_id: StringName, boss: bool = false) -> Texture2D:
+    var path := _enemy_icon_path(profile_id, boss)
+    if _enemy_icon_cache.has(path): return _enemy_icon_cache[path] as Texture2D
+    var requested_path := path
+    var texture := load(path) as Texture2D
+    if texture == null and path != ENEMY_FALLBACK_ICON_PATH:
+        path = ENEMY_FALLBACK_ICON_PATH
+        texture = load(path) as Texture2D
+    if texture == null: return null
+    if path == ENEMY_FALLBACK_ICON_PATH:
+        var atlas := AtlasTexture.new()
+        atlas.atlas = texture
+        atlas.region = Rect2(0, 0, 32, 32)
+        texture = atlas
+    _enemy_icon_cache[requested_path] = texture
+    _enemy_icon_cache[path] = texture
+    return texture
 
 func _stone_icon_texture() -> Texture2D:
     return load("res://assets/art/gameplay/environment/stones/stone_01.png") as Texture2D
@@ -1253,27 +1645,41 @@ func _refresh_inspector_content() -> void:
     inspector_stats_label.text = ""
     if selection.is_empty(): return
     if selection.kind == SelectionState.Kind.GEM:
-        inspector_title_label.text = "Torre seleccionada" if LocalizationService.locale == "es" else "Selected tower"
+        inspector_title_label.text = LocalizationService.tr_key("game.inspector.tower.title")
         var gem: GemInstance = selection.value
         var definition := runtime.foundation.catalog.gem_definition_for_id(gem.id) as GemDefinition
         var stats := TowerCombatStats.from_gem(gem, definition)
         inspector_name_label.text = "[b]%s[/b]" % (_quality_label(gem.quality) + " " + _display_gem_name(gem.id))
-        inspector_stats_label.text = "• Nivel: %d\n• Damage: %.1f\n• Range: %.1f\n• Attack Speed: %.1f" % [gem.level, stats.damage, stats.range_units, stats.total_attack_speed()]
+        var abilities := _gem_abilities(gem)
+        inspector_stats_label.text = LocalizationService.tr_key("game.inspector.tower.stats", {"level": gem.level, "damage": "%.1f" % stats.damage, "range": "%.1f" % stats.range_units, "speed": "%.1f" % stats.total_attack_speed(), "abilities": abilities})
     elif selection.kind == SelectionState.Kind.TOWER:
-        inspector_title_label.text = "Torre seleccionada" if LocalizationService.locale == "es" else "Selected tower"
+        inspector_title_label.text = LocalizationService.tr_key("game.inspector.tower.title")
         var tower: TowerRuntime = selection.value
         inspector_name_label.text = "[b]%s[/b]" % _display_gem_name(tower.id)
-        inspector_stats_label.text = "• Nivel: %d\n• Damage: %.1f\n• Range: %.1f\n• Attack Speed: %.1f" % [tower.gem.level if tower.gem != null else 1, tower.stats.damage, tower.stats.range_units, tower.stats.total_attack_speed()]
+        inspector_stats_label.text = LocalizationService.tr_key("game.inspector.tower.stats", {"level": tower.gem.level if tower.gem != null else 1, "damage": "%.1f" % tower.stats.damage, "range": "%.1f" % tower.stats.range_units, "speed": "%.1f" % tower.stats.total_attack_speed(), "abilities": ", ".join(tower.abilities) if not tower.abilities.is_empty() else "—"})
     elif selection.kind == SelectionState.Kind.ENEMY:
-        inspector_title_label.text = "Enemigo seleccionado" if LocalizationService.locale == "es" else "Selected enemy"
+        inspector_title_label.text = LocalizationService.tr_key("game.inspector.enemy.title")
         var enemy: EnemyRuntime = selection.value
         var enemy_profile := runtime.foundation.catalog.enemy_profile_by_id(enemy.profile_id) as EnemyProfileDefinition
         var catalog_name := enemy_profile.display_name if enemy_profile != null else ""
         inspector_name_label.text = "[b]%s[/b]" % LocalizationService.enemy_display_name(enemy.profile_id, catalog_name)
-        inspector_stats_label.text = "• HP: %.1f / %.1f\n• Armor: %.1f\n• Magic: %.1f" % [enemy.hp, enemy.max_hp, enemy.armor, enemy.magic_resistance]
+        inspector_stats_label.text = LocalizationService.tr_key("game.inspector.enemy.stats", {"hp": "%.1f" % enemy.hp, "max_hp": "%.1f" % enemy.max_hp, "armor": "%.1f" % enemy.armor, "magic": "%.1f" % enemy.magic_resistance})
     else:
-        inspector_title_label.text = "Piedra seleccionada" if LocalizationService.locale == "es" else "Selected stone"
+        inspector_title_label.text = LocalizationService.tr_key("game.inspector.stone.title")
         inspector_name_label.text = "[b]%s[/b]" % LocalizationService.tr_key("game.selection.stone")
+
+func _gem_abilities(gem: GemInstance) -> String:
+    if gem == null or runtime == null: return "—"
+    var definition := runtime.foundation.catalog.gem_definition_for_id(gem.id) as GemDefinition
+    var level_data := TowerCombatStats.level_data_for(gem, definition)
+    var values := PackedStringArray()
+    for value in level_data.get("ability_ids", PackedStringArray()):
+        var key := str(value)
+        if key not in ["sin_efecto", "spell_steal_placeholder_v1"] and key not in values: values.append(key)
+    var display_ability := str(level_data.get("ability", "")).strip_edges()
+    if not display_ability.is_empty() and display_ability not in values: values.append(display_ability)
+    return ", ".join(values) if not values.is_empty() else "—"
+
     if is_instance_valid(feedback_label): feedback_label.text = LocalizationService.tr_key(feedback_key)
     if is_instance_valid(help_button): help_button.text = LocalizationService.tr_key("game.help.title")
 
@@ -1283,7 +1689,7 @@ func _selection_summary() -> String:
         var gem: GemInstance = selection.value
         var definition := runtime.foundation.catalog.gem_definition_for_id(gem.id) as GemDefinition
         var stats := TowerCombatStats.from_gem(gem, definition)
-        return "%s %s (Level %d)\nDamage: %.1f\nRange: %.1f\nAttack Speed: %.1f" % [_quality_label(gem.quality), _display_gem_name(gem.id), gem.level, stats.damage, stats.range_units, stats.total_attack_speed()]
+        return "%s %s\n%s" % [_quality_label(gem.quality), _display_gem_name(gem.id), LocalizationService.tr_key("game.inspector.tower.stats", {"level": gem.level, "damage": "%.1f" % stats.damage, "range": "%.1f" % stats.range_units, "speed": "%.1f" % stats.total_attack_speed(), "abilities": _gem_abilities(gem)})]
     if selection.kind == SelectionState.Kind.ENEMY:
         var enemy: EnemyRuntime = selection.value
         var enemy_profile := runtime.foundation.catalog.enemy_profile_by_id(enemy.profile_id) as EnemyProfileDefinition
@@ -1298,6 +1704,7 @@ func _hud_panel() -> StyleBoxTexture:
     var panel := StyleBoxTexture.new(); panel.texture = load("res://assets/ui/panels/rpg_panel_brown.png"); panel.texture_margin_left = 16; panel.texture_margin_top = 16; panel.texture_margin_right = 16; panel.texture_margin_bottom = 16; panel.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT; panel.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT; return panel
 
 func _style_game_button(button: Button) -> void:
+    CursorManager.set_clickable(button)
     button.add_theme_stylebox_override("normal", _texture_style("res://assets/ui/buttons/button_normal.png", 7))
     button.add_theme_stylebox_override("hover", _texture_style("res://assets/ui/buttons/button_hover.png", 7))
     button.add_theme_stylebox_override("pressed", _texture_style("res://assets/ui/buttons/button_hover.png", 7, Color(0.88, 0.88, 0.88, 1.0)))
@@ -1354,6 +1761,7 @@ class MapDebugView extends Control:
     var stone_nodes: Dictionary = {}
     var spawner_layer: Control
     var spawner_decoration: SpawnerDecoration
+    var castle_decoration: CastleCheckpointDecoration
     var hover_cell := Vector2i(-1, -1)
     var hover_can_place := false
     var map_zoom := 1.0
@@ -1362,9 +1770,7 @@ class MapDebugView extends Control:
     var dragging := false
     var drag_start := Vector2.ZERO
     var pan_start := Vector2.ZERO
-    var placement_preview: TextureRect
     const PROJECTILE_TEXTURE := preload("res://assets/art/gameplay/projectiles/fireball_5_colors.png")
-    const ENEMY_TEXTURE := preload("res://assets/art/gameplay/enemies/pipo_nekonin027.png")
     func _ready() -> void:
         mouse_filter = Control.MOUSE_FILTER_STOP
         clip_contents = true
@@ -1399,30 +1805,30 @@ class MapDebugView extends Control:
         stone_layer = Control.new()
         stone_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         stone_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        stone_layer.z_index = 2
+        # Stones remain readable when large tower sprites overlap nearby cells.
+        stone_layer.z_index = 5
         add_child(stone_layer)
         spawner_layer = Control.new()
         spawner_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         spawner_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        spawner_layer.z_index = 1
+        # The portal must remain readable when a generated border tree shares
+        # its cells: trees stay above fences, while the spawn stays above trees.
+        spawner_layer.z_as_relative = false
+        spawner_layer.z_index = 8
         add_child(spawner_layer)
         spawner_decoration = SpawnerDecoration.new()
         spawner_layer.add_child(spawner_decoration)
-        placement_preview = TextureRect.new()
-        placement_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-        placement_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        placement_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-        placement_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        placement_preview.texture = load("res://assets/art/gameplay/building/slots/PlaceForTower1.png") as Texture2D
-        placement_preview.visible = false
-        placement_preview.z_index = 4
-        add_child(placement_preview)
+        castle_decoration = CastleCheckpointDecoration.new()
+        castle_decoration.z_index = 1
+        castle_decoration.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        add_child(castle_decoration)
         var zoom_bar := HBoxContainer.new()
         zoom_bar.position = Vector2(2, 2)
         zoom_bar.add_theme_constant_override("separation", 4)
         for item in [["−", -0.1], ["＋", 0.1], ["⌂", 0.0]]:
-            var button := Button.new(); button.text = item[0]; button.custom_minimum_size = Vector2(30, 30); button.tooltip_text = "Zoom"
+            var button := Button.new(); button.text = item[0]; button.custom_minimum_size = Vector2(30, 30); button.tooltip_text = LocalizationService.tr_key("game.zoom"); view._style_game_button(button)
             button.pressed.connect(func():
+                view._close_context_popup_for_camera_change()
                 if item[1] == 0.0: map_zoom = 1.0; map_pan = Vector2.ZERO
                 else: map_zoom = clampf(map_zoom + float(item[1]), 0.65, 2.5); _center_zoom()
                 _clamp_pan(); queue_redraw(); sync_gem_sprites())
@@ -1430,7 +1836,7 @@ class MapDebugView extends Control:
         add_child(zoom_bar)
         mouse_entered.connect(func(): view._set_map_cursor(hover_can_place))
         mouse_exited.connect(func(): hover_cell = Vector2i(-1, -1); hover_can_place = false; view._leave_map_cursor(); tooltip_text = ""; sync_gem_sprites(); queue_redraw())
-        resized.connect(func(): sync_gem_sprites())
+        resized.connect(func(): view._close_context_popup_for_camera_change(); sync_gem_sprites())
         call_deferred("sync_gem_sprites")
 
     func sync_gem_sprites() -> void:
@@ -1445,28 +1851,52 @@ class MapDebugView extends Control:
         grid_layer.size = size
         terrain_layer.sync(board_size, map_zoom, map_pan, board_origin)
         decoration_layer.sync(board_size, map_zoom, map_pan, board_origin)
+        if castle_decoration != null and runtime.map != null and not runtime.map.checkpoints.is_empty():
+            castle_decoration.sync_cell(runtime.map.endpoint, scale_value, map_zoom, map_pan, board_origin)
+            castle_decoration.visible = castle_decoration.texture != null
+        elif castle_decoration != null:
+            castle_decoration.visible = false
         grid_layer.sync(board_size, map_zoom, map_pan, board_origin)
         _sync_spawner(scale_value)
         _sync_stone_sprites(scale_value)
-        _sync_placement_preview(scale_value)
-        var sprite_size := maxf(12.0, scale_value * 1.05)
         for gem: GemInstance in runtime.construction.board_gems:
             var key := str(gem.get_instance_id())
             live[key] = true
+            var is_tower_visual := runtime.phases.phase == GamePhaseMachine.Phase.COMBAT or gem.round_id < runtime.construction.round_id
+            # Visual scale and anchoring never change the one-cell logical footprint.
+            var sprite_size := maxf(36.0, scale_value * GemAssetLibrary.GEM_SPRITE_CELLS)
+            if is_tower_visual:
+                sprite_size = scale_value * GemAssetLibrary.TOWER_VISIBLE_CELLS
+                if view.gem_assets != null and view.gem_assets.has_base_asset(gem.id, gem.level):
+                    var visible_fraction := view.gem_assets.get_tower_visible_fraction(gem.id, gem.level)
+                    sprite_size /= maxf(0.01, maxf(visible_fraction.x, visible_fraction.y))
             var sprite: TextureRect
             if _gem_nodes_has(key):
                 sprite = _gem_nodes_get(key)
             else:
                 sprite = view._make_gem_sprite(gem.id, gem.level, sprite_size)
+                # Map entities must be free to shrink below their creation size.
+                # Keeping the UI-oriented minimum makes Godot clamp the rect on
+                # zoom-out while its anchor is calculated with the smaller size.
+                sprite.custom_minimum_size = Vector2.ZERO
                 gem_layer.add_child(sprite)
                 _gem_nodes_set(key, sprite)
-            if gem == runtime.construction.selected_board_gem:
+            if is_tower_visual:
+                sprite.texture = view._tower_texture(gem.id, gem.level)
+            elif gem == runtime.construction.selected_board_gem and view.gem_assets != null and not view.gem_assets.has_base_asset(gem.id, gem.level):
                 sprite.texture = view._gem_animation_texture(gem.id, gem.level, int(Time.get_ticks_msec() / 140.0))
             else:
                 sprite.texture = view._gem_texture(gem.id, gem.level)
             if sprite.texture == null: sprite.texture = view._fallback_gem_texture(gem.id)
-            sprite.position = board_origin + map_pan + ((Vector2(gem.cell) + Vector2.ONE * 0.5) * scale_value - Vector2.ONE * sprite_size * 0.5) * map_zoom
-            sprite.size = Vector2.ONE * sprite_size * map_zoom
+            var display_size := Vector2.ONE * sprite_size * map_zoom
+            if is_tower_visual and view.gem_assets != null and view.gem_assets.has_base_asset(gem.id, gem.level):
+                var visual_anchor := view.gem_assets.get_tower_visual_anchor(gem.id, gem.level)
+                var cell_base := board_origin + map_pan + (Vector2(gem.cell) + Vector2(0.5, GemAssetLibrary.TOWER_BASE_CELL_Y)) * scale_value * map_zoom
+                sprite.position = cell_base - visual_anchor * display_size
+            else:
+                sprite.position = board_origin + map_pan + ((Vector2(gem.cell) + Vector2.ONE * 0.5) * scale_value - Vector2.ONE * sprite_size * 0.5) * map_zoom
+            sprite.custom_minimum_size = Vector2.ZERO
+            sprite.size = display_size
             sprite.visible = true
         for key in _gem_nodes_keys():
             if not live.has(key):
@@ -1496,7 +1926,7 @@ class MapDebugView extends Control:
         if runtime == null or not is_instance_valid(spawner_decoration) or spawner_decoration.texture == null: return
         var source_size := spawner_decoration.texture.get_size()
         if source_size.y <= 0.0: return
-        var target_height := scale_value * 1.55 * map_zoom
+        var target_height := scale_value * 4.0 * map_zoom
         var target_size := source_size * (target_height / source_size.y)
         spawner_decoration.size = target_size
         var spawn_center := (Vector2(runtime.map.spawn) + Vector2(0.5, 0.95)) * scale_value * map_zoom + map_pan
@@ -1505,16 +1935,25 @@ class MapDebugView extends Control:
     func _sync_stone_sprites(scale_value: float) -> void:
         if runtime == null or not is_instance_valid(stone_layer): return
         var live := {}
-        var target_max_size := maxf(8.0, scale_value * 0.72) * map_zoom
+        var target_visible_size := scale_value * GemAssetLibrary.STONE_VISIBLE_CELLS * map_zoom
+        var target_max_size := target_visible_size / StoneDecoration.VISIBLE_MAX_FRACTION
         for cell: Vector2i in runtime.construction.stones:
             var key := str(cell)
             live[key] = true
             var sprite := stone_nodes.get(key) as StoneDecoration
             if not is_instance_valid(sprite):
                 sprite = StoneDecoration.new()
+                sprite.cell = cell
+                sprite.stone_clicked.connect(_on_stone_sprite_clicked)
                 stone_layer.add_child(sprite)
                 stone_nodes[key] = sprite
+            else:
+                sprite.cell = cell
             if sprite.texture == null: continue
+            # A tower visually rises into the cell directly above its logical
+            # footprint. Keep a stone in that cell behind the tower, while all
+            # other stones retain their foreground layer.
+            sprite.z_index = -3 if _stone_is_directly_above_tower(cell) else 0
             var source_size := sprite.texture.get_size()
             var max_dimension := maxf(source_size.x, source_size.y)
             if max_dimension <= 0.0: continue
@@ -1527,37 +1966,49 @@ class MapDebugView extends Control:
                 if is_instance_valid(stale): stale.queue_free()
                 stone_nodes.erase(key)
 
-    func _sync_placement_preview(scale_value: float) -> void:
-        if not is_instance_valid(placement_preview): return
-        var visible_preview := runtime != null and runtime.phases.phase == GamePhaseMachine.Phase.CONSTRUCTION and hover_cell.x >= 0
-        placement_preview.visible = visible_preview
-        if not visible_preview: return
-        var target_size := maxf(12.0, scale_value * 0.82) * map_zoom
-        var slot_name := "PlaceForTower2.png" if (hover_cell.x + hover_cell.y) % 2 == 0 else "PlaceForTower1.png"
-        placement_preview.texture = load("res://assets/art/gameplay/building/slots/%s" % slot_name) as Texture2D
-        placement_preview.size = Vector2.ONE * target_size
-        placement_preview.position = board_origin + map_pan + ((Vector2(hover_cell) + Vector2.ONE * 0.5) * scale_value * map_zoom) - Vector2.ONE * target_size * 0.5
-        placement_preview.modulate = Color(1.0, 1.0, 1.0, 0.82) if hover_can_place else Color(1.0, 0.35, 0.35, 0.45)
+    func _stone_is_directly_above_tower(stone_cell: Vector2i) -> bool:
+        if runtime == null: return false
+        var tower_cell := stone_cell + Vector2i.DOWN
+        for gem: GemInstance in runtime.construction.board_gems:
+            var is_tower_visual := runtime.phases.phase == GamePhaseMachine.Phase.COMBAT or gem.round_id < runtime.construction.round_id
+            if is_tower_visual and gem.cell == tower_cell: return true
+        return false
+
+    func _on_stone_sprite_clicked(cell: Vector2i) -> void:
+        if runtime == null or not runtime.construction.stones.has(cell): return
+        view.place_gem_mode = false
+        view.selection.select(SelectionState.Kind.STONE, cell)
+        runtime.construction.select_stone(cell)
+        view._open_stone_popup_for(cell)
+        queue_redraw()
+
 
     func place_gem_at_hover() -> void:
+        place_gem_at_cell(hover_cell)
+
+    func place_gem_at_cell(cell: Vector2i) -> void:
         if runtime == null or runtime.phases.phase != GamePhaseMachine.Phase.CONSTRUCTION:
             return
-        if hover_cell.x < 0 or not _can_preview_placement(hover_cell):
+        if cell.x < 0 or not _can_preview_placement(cell):
             view._set_feedback("game.feedback.invalid_action")
             return
-        var placed := runtime.construction.place_gem(hover_cell, int(runtime.player_state.player_level))
+        var placed := runtime.construction.place_gem(cell, int(runtime.player_state.player_level))
         if placed == null:
             view._set_feedback("game.feedback.invalid_action")
             return
         view.selection.clear()
+        view.place_gem_mode = false
         hover_can_place = false
         view._set_map_cursor(false)
     func _gui_input(event: InputEvent) -> void:
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+            view._close_context_popup_for_camera_change()
             map_zoom = clampf(map_zoom + 0.1, 0.65, 2.5); _center_zoom(); _clamp_pan(); queue_redraw(); sync_gem_sprites(); return
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+            view._close_context_popup_for_camera_change()
             map_zoom = clampf(map_zoom - 0.1, 0.65, 2.5); _center_zoom(); _clamp_pan(); queue_redraw(); sync_gem_sprites(); return
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
+            if event.pressed: view._close_context_popup_for_camera_change()
             dragging = event.pressed; drag_start = event.position; pan_start = map_pan; return
         if event is InputEventMouseMotion and dragging:
             map_pan = pan_start + event.position - drag_start; _clamp_pan(); queue_redraw(); sync_gem_sprites(); return
@@ -1572,22 +2023,34 @@ class MapDebugView extends Control:
             var cell := _cell_at(event.position)
             if runtime.phases.phase == GamePhaseMachine.Phase.CONSTRUCTION:
                 var gem := runtime.construction.gem_at_cell(cell)
-                if gem != null: view.selection.select(SelectionState.Kind.GEM, gem); runtime.construction.select_board_gem(cell)
-                elif runtime.construction.stones.has(cell): view.selection.select(SelectionState.Kind.STONE, cell); runtime.construction.select_stone(cell)
+                if gem != null:
+                    view.place_gem_mode = false
+                    view.selection.select(SelectionState.Kind.GEM, gem); runtime.construction.select_board_gem(cell)
+                    view._open_combination_popup_for(gem)
+                elif runtime.construction.stones.has(cell):
+                    view.place_gem_mode = false
+                    view.selection.select(SelectionState.Kind.STONE, cell); runtime.construction.select_stone(cell)
+                    view._open_stone_popup_for(cell)
+                elif view.place_gem_mode:
+                    place_gem_at_cell(cell)
                 else: view.selection.clear()
                 hover_can_place = _can_preview_placement(cell)
                 view._set_map_cursor(hover_can_place)
             else:
                 var clicked_entity := false
                 if runtime.construction.stones.has(cell):
-                    view.selection.select(SelectionState.Kind.STONE, cell); runtime.construction.select_stone(cell); clicked_entity = true
+                    view.selection.select(SelectionState.Kind.STONE, cell); runtime.construction.select_stone(cell); view._open_stone_popup_for(cell); clicked_entity = true
                 for tower in runtime.combat.towers:
                     if tower.position.distance_to(Vector2(cell) * 100.0 + Vector2.ONE * 50.0) < 80.0:
-                        view.selection.select(SelectionState.Kind.TOWER, tower); clicked_entity = true; queue_redraw(); return
+                        view.selection.select(SelectionState.Kind.TOWER, tower); clicked_entity = true; view._open_combination_popup_for(tower.gem); queue_redraw(); return
                 for enemy in runtime.combat.enemies:
                     if enemy.is_alive() and enemy.position.distance_to(Vector2(cell) * 100.0 + Vector2.ONE * 50.0) < 80.0: view.selection.select(SelectionState.Kind.ENEMY, enemy); clicked_entity = true; break
                 if not clicked_entity: view.selection.clear()
             queue_redraw()
+
+    func global_position_for_cell(cell: Vector2i) -> Vector2:
+        var scale_value := minf(size.x, size.y) / 36.0
+        return global_position + board_origin + map_pan + ((Vector2(cell) + Vector2.ONE * 0.5) * scale_value * map_zoom)
     func _cell_at(position: Vector2) -> Vector2i:
         var scale_value := minf(size.x, size.y) / 36.0
         var local := (position - board_origin - map_pan) / map_zoom
@@ -1621,22 +2084,43 @@ class MapDebugView extends Control:
             var stone := stone_nodes.get(str(cell)) as StoneDecoration
             if not is_instance_valid(stone) or stone.texture == null:
                 draw_circle((Vector2(cell)+Vector2.ONE*0.5)*scale_value, maxf(4.0, scale_value * 0.3), Color("8b8f9a"))
+        var range_center := Vector2.ZERO
+        var range_units := -1.0
         if view.selection.kind == SelectionState.Kind.TOWER:
-            var selected_combat_gem := view.selection.value as TowerRuntime
-            if selected_combat_gem != null:
-                draw_circle(selected_combat_gem.position / 100.0 * scale_value, maxf(12.0, scale_value * 0.8), Color("fff1a8"), false, 3.0)
+            var selected_tower := view.selection.value as TowerRuntime
+            if selected_tower != null:
+                range_center = selected_tower.position / 100.0 * scale_value
+                range_units = selected_tower.stats.range_units
+        elif view.selection.kind == SelectionState.Kind.GEM:
+            var selected_gem := view.selection.value as GemInstance
+            if selected_gem != null:
+                var definition := runtime.foundation.catalog.gem_definition_for_id(selected_gem.id) as GemDefinition
+                range_center = (Vector2(selected_gem.cell) + Vector2.ONE * 0.5) * scale_value
+                range_units = TowerCombatStats.from_gem(selected_gem, definition).range_units
+        if range_units >= 0.0:
+            draw_circle(range_center, maxf(12.0, range_units / 100.0 * scale_value), Color(1.0, 0.82, 0.35, 0.72), false, 3.0)
         for enemy: EnemyRuntime in runtime.combat.enemies:
             if enemy.is_alive():
                 var p := enemy.position / 100.0 * scale_value
-                var enemy_size := maxf(24.0, scale_value * 1.95)
+                var is_boss := runtime.current_wave_is_boss
+                var is_invisible := enemy.profile_id == &"invisible_spider_w8" and not is_boss
+                var enemy_size := maxf(24.0, scale_value * (2.4 if is_boss else 1.95))
                 var frame := int(Time.get_ticks_msec() / 160) % 3
                 var direction := Vector2.ZERO
                 if enemy.path_index < enemy.path.size() - 1: direction = enemy.path[enemy.path_index + 1] - enemy.position
-                var row := 0
-                if absf(direction.x) > absf(direction.y): row = 1 if direction.x < 0.0 else 2
-                elif direction.y < 0.0: row = 3
-                draw_texture_rect_region(ENEMY_TEXTURE, Rect2(p-Vector2.ONE*enemy_size*0.5, Vector2.ONE*enemy_size), Rect2(frame * 32, row * 32, 32, 32))
-                draw_rect(Rect2(p+Vector2(-enemy_size*0.42,enemy_size*0.42),Vector2(enemy_size*0.84,4)),Color("3a1820")); draw_rect(Rect2(p+Vector2(-enemy_size*0.42,enemy_size*0.42),Vector2(enemy_size*0.84*enemy.hp/enemy.max_hp,4)),Color("e66b6b"))
+                var row := view._enemy_direction_row(direction, is_boss)
+                var enemy_sheet := view._enemy_sheet(enemy.profile_id, runtime.current_wave_is_boss)
+                if enemy_sheet != null:
+                    var frame_size := Vector2(enemy_sheet.get_width() / 3.0, enemy_sheet.get_height() / 4.0)
+                    var sprite_modulate := Color(1.0, 1.0, 1.0, 0.72) if is_invisible else Color.WHITE
+                    draw_texture_rect_region(enemy_sheet, Rect2(p-Vector2.ONE*enemy_size*0.5, Vector2.ONE*enemy_size), Rect2(frame * frame_size.x, row * frame_size.y, frame_size.x, frame_size.y), sprite_modulate)
+                var health_ratio := clampf(enemy.hp / maxf(enemy.max_hp, 0.001), 0.0, 1.0)
+                var is_ghost := enemy.profile_id == &"thrilling_ghost_w40"
+                var health_bar_size := 5.0 if is_boss and not is_ghost else 4.0
+                var health_bar_color := Color("ffd56a") if is_boss and not is_ghost else (Color("c9c7ff") if is_invisible else Color("e66b6b"))
+                var health_bar_rect := Rect2(p + Vector2(-enemy_size * 0.42, enemy_size * 0.42), Vector2(enemy_size * 0.84, health_bar_size))
+                draw_rect(health_bar_rect, Color("3a1820"))
+                draw_rect(Rect2(health_bar_rect.position, Vector2(health_bar_rect.size.x * health_ratio, health_bar_size)), health_bar_color)
         for projectile: HomingProjectile in runtime.combat.projectiles:
             _draw_projectile(projectile, scale_value)
         draw_set_transform(board_origin + map_pan, 0.0, Vector2.ONE * map_zoom)
@@ -1831,6 +2315,8 @@ class MapGridLayer extends Control:
 
 class MapDecorationLayer extends Control:
     const GRID_SIZE := 36
+    const FENCE_RENDER_LAYER := 6
+    const TREE_RENDER_LAYER := 7
     var runtime: GameRuntime
     var generated := false
     var decorations: Array[TextureRect] = []
@@ -1965,6 +2451,9 @@ class MapDecorationLayer extends Control:
                 decoration.mouse_filter = Control.MOUSE_FILTER_IGNORE
                 decoration.set_meta("cell", cell)
                 decoration.set_meta("category", entry["category"])
+                if "/trees/" in path:
+                    decoration.z_as_relative = false
+                    decoration.z_index = TREE_RENDER_LAYER
                 add_child(decoration)
                 decorations.append(decoration)
                 if category in ["grass", "flowers"]: small_nature_cells.append(cell)
@@ -1998,6 +2487,10 @@ class MapDecorationLayer extends Control:
         fence.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         fence.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
         fence.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        # Border fences are a foreground edge: they must occlude the castle
+        # where the landmark meets the map boundary.
+        fence.z_as_relative = false
+        fence.z_index = FENCE_RENDER_LAYER
         fence.set_meta("cell", cell)
         fence.set_meta("vertical", vertical)
         add_child(fence)
@@ -2015,6 +2508,8 @@ class MapDecorationLayer extends Control:
         fence.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         fence.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
         fence.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        fence.z_as_relative = false
+        fence.z_index = FENCE_RENDER_LAYER
         fence.set_meta("cell", cell)
         fence.set_meta("vertical", false)
         fence.set_meta("corner", true)
@@ -2092,10 +2587,15 @@ class MapDecorationLayer extends Control:
     func _generate_background_decorations() -> void:
         if runtime == null: return
         var candidates: Array[Vector2i] = []
-        var cell_size := maxf(1.0, minf(size.x, size.y) / float(GRID_SIZE))
-        var margin_cells := maxi(4, ceili(maxf(size.x, size.y) / cell_size) + 2)
-        for y in range(-margin_cells, GRID_SIZE + margin_cells):
-            for x in range(-margin_cells, GRID_SIZE + margin_cells):
+        var board_size := minf(size.x, size.y)
+        var cell_size := maxf(1.0, board_size / float(GRID_SIZE))
+        # The board is square and centered. Only the strips outside that
+        # square can be visible, so calculate horizontal and vertical margins
+        # independently instead of allocating a large square around it.
+        var horizontal_margin := maxi(2, ceili(maxf(0.0, size.x - board_size) / (cell_size * 2.0)) + 2)
+        var vertical_margin := maxi(2, ceili(maxf(0.0, size.y - board_size) / (cell_size * 2.0)) + 2)
+        for y in range(-vertical_margin, GRID_SIZE + vertical_margin):
+            for x in range(-horizontal_margin, GRID_SIZE + horizontal_margin):
                 var outside := x < 0 or y < 0 or x >= GRID_SIZE or y >= GRID_SIZE
                 if not outside: continue
                 # Keep clear spots so the outer field feels scattered.
@@ -2122,6 +2622,9 @@ class MapDecorationLayer extends Control:
             decoration.mouse_filter = Control.MOUSE_FILTER_IGNORE
             decoration.set_meta("virtual_cell", cell)
             decoration.set_meta("category", entry["category"])
+            if entry["category"] == "tree":
+                decoration.z_as_relative = false
+                decoration.z_index = TREE_RENDER_LAYER
             add_child(decoration)
             background_decorations.append(decoration)
             accepted_cells.append(cell)
@@ -2151,6 +2654,9 @@ class MapDecorationLayer extends Control:
         tree.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         tree.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
         tree.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        # Tree canopies and trunks remain in front of the border fence.
+        tree.z_as_relative = false
+        tree.z_index = TREE_RENDER_LAYER
         tree.set_meta("cell", cell)
         tree.set_meta("side", side)
         tree.set_meta("scale_factor", 0.92 + float(posmod(variant_seed, 3)) * 0.08)
@@ -2244,10 +2750,7 @@ class FlagDecoration extends TextureRect:
 
 class SpawnerDecoration extends TextureRect:
     const FRAME_PATHS := [
-        "res://assets/art/gameplay/environment/spawner/spawner_01.png",
-        "res://assets/art/gameplay/environment/spawner/spawner_02.png",
-        "res://assets/art/gameplay/environment/spawner/spawner_03.png",
-        "res://assets/art/gameplay/environment/spawner/spawner_04.png",
+        "res://assets/art/gameplay/environment/spawner/spawn_monster.png",
     ]
 
     func _ready() -> void:
@@ -2259,24 +2762,63 @@ class SpawnerDecoration extends TextureRect:
         texture = load(FRAME_PATHS[frame_index]) as Texture2D
         if texture == null: push_warning("Spawner texture missing: %s" % FRAME_PATHS[frame_index])
 
-class StoneDecoration extends TextureRect:
-    const FRAME_PATHS := [
-        "res://assets/art/gameplay/environment/stones/stone_06.png",
-        "res://assets/art/gameplay/environment/stones/stone_05.png",
-        "res://assets/art/gameplay/environment/stones/stone_04.png",
-        "res://assets/art/gameplay/environment/stones/stone_03.png",
-        "res://assets/art/gameplay/environment/stones/stone_02.png",
-        "res://assets/art/gameplay/environment/stones/stone_01.png",
-    ]
+class CastleCheckpointDecoration extends TextureRect:
+    const CASTLE_PATH := "res://assets/art/gameplay/environment/landmarks/castle/castle_checkpoint.png"
+    const CASTLE_HEIGHT_CELLS := 8.16
+    # The asset's wooden gate is on its left face. Anchor that gate to the
+    # checkpoint instead of anchoring the texture's geometric center.
+    const CASTLE_ENTRY_U := 0.215
+    const CASTLE_ENTRY_V := 0.456
+    const CASTLE_INSET_X_CELLS := -3.0
+    const CASTLE_INSET_Y_CELLS := -0.5
 
     func _ready() -> void:
-        mouse_filter = Control.MOUSE_FILTER_IGNORE
         texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
         expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-        var frame_index := randi_range(0, FRAME_PATHS.size() - 1)
-        texture = load(FRAME_PATHS[frame_index]) as Texture2D
-        if texture == null: push_warning("Stone texture missing: %s" % FRAME_PATHS[frame_index])
+        texture = load(CASTLE_PATH) as Texture2D
+        if texture == null: push_warning("Castle checkpoint texture missing: %s" % CASTLE_PATH)
+
+    func sync_cell(cell: Vector2i, cell_size: float, map_zoom: float, map_pan: Vector2, board_origin: Vector2) -> void:
+        if texture == null: return
+        var source_size := texture.get_size()
+        var target_height := cell_size * CASTLE_HEIGHT_CELLS * map_zoom
+        var display_size := source_size * (target_height / maxf(1.0, source_size.y))
+        var checkpoint := board_origin + map_pan + (Vector2(cell) + Vector2(0.5 + CASTLE_INSET_X_CELLS, 0.5 + CASTLE_INSET_Y_CELLS)) * cell_size * map_zoom
+        size = display_size
+        # Place the wooden entrance on the final checkpoint. The building may
+        # extend beyond the map border, which is intentional for the corner
+        # landmark and does not change the one-cell logical endpoint.
+        position = checkpoint - Vector2(display_size.x * CASTLE_ENTRY_U, display_size.y * CASTLE_ENTRY_V)
+
+class StoneDecoration extends TextureRect:
+    signal stone_clicked(cell: Vector2i)
+
+    const STONE_TEXTURE_PATH := "res://assets/art/gameplay/environment/stones/petrified_gem_rocks.png"
+    const STONE_REGION := Rect2(360, 380, 605, 530)
+    const VISIBLE_MAX_FRACTION := 589.0 / 605.0
+    var cell := Vector2i(-1, -1)
+
+    func _ready() -> void:
+        mouse_filter = Control.MOUSE_FILTER_STOP
+        mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+        expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        var sheet := load(STONE_TEXTURE_PATH) as Texture2D
+        if sheet == null:
+            push_warning("Stone texture missing: %s" % STONE_TEXTURE_PATH)
+            return
+        var cropped := AtlasTexture.new()
+        cropped.atlas = sheet
+        cropped.region = STONE_REGION
+        cropped.filter_clip = true
+        texture = cropped
+
+    func _gui_input(event: InputEvent) -> void:
+        if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+            stone_clicked.emit(cell)
+            accept_event()
 
 class CampfireDecoration extends TextureRect:
     const SHEET := preload("res://assets/art/gameplay/environment/campfire.png")
