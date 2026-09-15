@@ -103,11 +103,8 @@ func _on_game_phase_entered(phase: int) -> void:
 func _build_ui() -> void:
     var background := ColorRect.new(); background.color = Color("0e1524"); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(background)
     backgrounds = [
-        load("res://assets/art/backgrounds/kingdom.png") as Texture2D,
-        load("res://assets/art/backgrounds/battlefield.png") as Texture2D,
-        load("res://assets/art/backgrounds/forge.png") as Texture2D,
-        load("res://assets/art/backgrounds/war_room.png") as Texture2D,
-        load("res://assets/art/backgrounds/tavern_feast.png") as Texture2D,
+        load("res://assets/art/backgrounds/menu_council.png") as Texture2D,
+        load("res://assets/art/backgrounds/menu_crystal.png") as Texture2D,
     ]
     background_texture = _create_background_layer(background)
     background_next_texture = _create_background_layer(background)
