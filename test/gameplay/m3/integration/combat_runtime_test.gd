@@ -7,16 +7,21 @@ func run(suite: FoundationTestSuite) -> void:
 	_test_refresh_enemy_paths_preserves_progress(suite)
 	_test_clear_projectiles_on_phase_end(suite)
 	_test_magic_gem_damages_physical_immune_enemy(suite)
+	_test_cleave_hits_nearby_enemy(suite)
+	_test_split_hits_additional_target(suite)
 	var profile := EnemyProfileDefinition.new(); profile.id = &"test"; profile.hp = 25.0; profile.base_speed = 20.0
 	var definition := GemDefinition.new(); definition.id = &"diamond"; definition.levels = [{"level": 1, "damage": 50.0, "range": 1000.0, "base_attack_speed": 100.0, "bat": 1.0}]
 	var gem := GemInstance.new(&"diamond", 1, GemInstance.Quality.CHIPPED)
 	var tower := TowerRuntime.new(); tower.setup(gem, definition, Vector2.ZERO)
 	var combat := CombatRuntime.new(); combat.setup(1000.0, [Vector2i.ZERO, Vector2i(1, 0)]); combat.add_tower(tower)
 	var enemy := combat.spawn_enemy(profile, Vector2i(1, 0))
+	var damage_events := {"count": 0}
+	combat.damage_applied.connect(func(_damaged_enemy: EnemyRuntime, _amount: float): damage_events.count += 1)
 	var started := {"value": false, "gem_id": StringName()}; combat.projectile_created.connect(func(projectile: HomingProjectile): started.value = true; started.gem_id = projectile.source_gem_id)
 	combat.tick(1.0); suite.expect(started.value, "gem creates a homing projectile in combat")
 	suite.expect_equal(started.gem_id, &"diamond", "projectile preserves the source gem color")
 	combat.tick(0.1); suite.expect(not enemy.is_alive(), "projectile impact applies damage and kills enemy")
+	suite.expect(damage_events.count > 0, "combat emits a damage event for impact feedback")
 	suite.expect_equal(combat.enemies.size(), 0, "dead enemies are removed from combat runtime")
 
 func _test_refresh_enemy_paths_preserves_progress(suite: FoundationTestSuite) -> void:
@@ -52,6 +57,24 @@ func _test_magic_gem_damages_physical_immune_enemy(suite: FoundationTestSuite) -
 	var enemy := combat.spawn_enemy(profile, Vector2i(1, 0))
 	combat.tick(0.01); combat.tick(0.2)
 	suite.expect(enemy.hp < enemy.max_hp, "magic gem damages a physically immune enemy")
+
+func _test_cleave_hits_nearby_enemy(suite: FoundationTestSuite) -> void:
+	var profile := EnemyProfileDefinition.new(); profile.id = &"cleave_target"; profile.hp = 100.0; profile.base_speed = 20.0
+	var definition := GemDefinition.new(); definition.id = &"ruby"; definition.levels = [{"level": 1, "damage": 20.0, "range": 1000.0, "base_attack_speed": 1000.0, "ability": "Cleave 1"}]
+	var tower := TowerRuntime.new(); tower.setup(GemInstance.new(&"ruby", 1, GemInstance.Quality.CHIPPED), definition, Vector2.ZERO)
+	var combat := CombatRuntime.new(); combat.effect_system = EffectSystem.new(); combat.setup(1000.0, [Vector2i.ZERO, Vector2i(1, 0)]); combat.add_tower(tower)
+	var primary := combat.spawn_enemy(profile, Vector2i(1, 0)); var secondary := combat.spawn_enemy(profile, Vector2i(1, 0)); secondary.position = primary.position + Vector2(70, 0)
+	combat.tick(0.01); combat.tick(0.2)
+	suite.expect(primary.hp < primary.max_hp and secondary.hp < secondary.max_hp, "Cleave damages the primary and a nearby secondary target")
+
+func _test_split_hits_additional_target(suite: FoundationTestSuite) -> void:
+	var profile := EnemyProfileDefinition.new(); profile.id = &"split_target"; profile.hp = 100.0; profile.base_speed = 20.0
+	var definition := GemDefinition.new(); definition.id = &"topaz"; definition.levels = [{"level": 1, "damage": 20.0, "range": 1000.0, "base_attack_speed": 1000.0, "ability": "Split 1"}]
+	var tower := TowerRuntime.new(); tower.setup(GemInstance.new(&"topaz", 1, GemInstance.Quality.CHIPPED), definition, Vector2.ZERO)
+	var combat := CombatRuntime.new(); combat.effect_system = EffectSystem.new(); combat.setup(1000.0, [Vector2i.ZERO, Vector2i(1, 0)]); combat.add_tower(tower)
+	var primary := combat.spawn_enemy(profile, Vector2i(1, 0)); var secondary := combat.spawn_enemy(profile, Vector2i(1, 0)); secondary.position = primary.position + Vector2(90, 0)
+	combat.tick(0.01); combat.tick(0.2)
+	suite.expect(primary.hp < primary.max_hp and secondary.hp < secondary.max_hp, "Split damages the primary and its additional target")
 
 func _test_selection_before_placement(suite: FoundationTestSuite) -> void:
 	var runtime := GameRuntime.new()

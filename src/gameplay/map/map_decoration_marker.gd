@@ -1,6 +1,5 @@
 @tool
 class_name MapDecorationMarker
-extends MapEditableSprite
+extends MapDecorationObject
 
-@export_enum("grass", "flower", "bush", "tree", "prop", "landmark") var category := "prop"
-
+@export_enum("grass", "flower", "bush", "tree", "stone", "prop", "landmark") var category := "prop"

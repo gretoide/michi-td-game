@@ -1,5 +1,7 @@
 extends Node
 
+@export var visual_assets: VisualAssetConfig = preload("res://src/shared/visual_asset_config.tres")
+
 enum AccessState { LANDING, REGISTER, LOGIN, VERIFY_EMAIL, AUTHENTICATED_HOME }
 var access_state := AccessState.LANDING
 var api: ApiClient
@@ -50,6 +52,7 @@ var gameplay_view: GameplayView
 var settings_store: SettingsStore
 
 func _ready() -> void:
+	CursorManager.configure(visual_assets)
 	api = ApiClient.new(); add_child(api)
 	auth = AuthService.new(); add_child(auth); auth.setup(api)
 	settings_store = SettingsStore.new(); settings_store.load_settings(); LocalizationService.set_locale(settings_store.locale); settings_store.changed.connect(_update_music_toggle)
@@ -132,7 +135,7 @@ func _build_ui() -> void:
 	email_input = _create_input(LocalizationService.tr_key("auth.email"),false); email_input.visible = false; root_ui.add_child(email_input)
 	password_row = Control.new(); password_row.custom_minimum_size = Vector2(0,44)
 	password_input = _create_input(LocalizationService.tr_key("auth.password"),true); password_input.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); _add_password_icon_padding(password_input); password_row.add_child(password_input)
-	password_visibility_button = PasswordVisibilityButton.new(); password_visibility_button.custom_minimum_size = Vector2(44,40); password_visibility_button.anchor_left = 1.0; password_visibility_button.anchor_right = 1.0; password_visibility_button.offset_left = -48; password_visibility_button.offset_top = 2; password_visibility_button.offset_right = -4; password_visibility_button.offset_bottom = 42; password_visibility_button.connect("toggled", _toggle_password_visibility); _update_password_visibility_icon(); CursorManager.set_clickable(password_visibility_button); password_row.add_child(password_visibility_button); password_row.visible = false; root_ui.add_child(password_row)
+	password_visibility_button = PasswordVisibilityButton.new(); password_visibility_button.configure_icons(visual_assets.password_eye_visible, visual_assets.password_eye_hidden); password_visibility_button.custom_minimum_size = Vector2(44,40); password_visibility_button.anchor_left = 1.0; password_visibility_button.anchor_right = 1.0; password_visibility_button.offset_left = -48; password_visibility_button.offset_top = 2; password_visibility_button.offset_right = -4; password_visibility_button.offset_bottom = 42; password_visibility_button.connect("toggled", _toggle_password_visibility); _update_password_visibility_icon(); CursorManager.set_clickable(password_visibility_button); password_row.add_child(password_visibility_button); password_row.visible = false; root_ui.add_child(password_row)
 	submit_button = Button.new(); submit_button.custom_minimum_size = Vector2(0,54); _style_action_button(submit_button,true); submit_button.pressed.connect(_submit_auth); submit_button.visible = false; root_ui.add_child(submit_button)
 	mode_button = Button.new(); mode_button.flat = true; mode_button.custom_minimum_size = Vector2(0,38); mode_button.pressed.connect(_toggle_mode); mode_button.mouse_entered.connect(func(): _set_mode_button_text(true)); mode_button.mouse_exited.connect(func(): _set_mode_button_text(false)); mode_button.visible = false; _style_link_button(mode_button); root_ui.add_child(mode_button)
 	mode_button_label = RichTextLabel.new(); mode_button_label.bbcode_enabled = true; mode_button_label.fit_content = true; mode_button_label.scroll_active = false; mode_button_label.mouse_filter = Control.MOUSE_FILTER_IGNORE; mode_button_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); mode_button_label.offset_top = 3; mode_button_label.offset_bottom = -3; mode_button_label.add_theme_font_size_override("normal_font_size",20); mode_button.add_child(mode_button_label)
@@ -140,9 +143,9 @@ func _build_ui() -> void:
 	message_panel.add_theme_stylebox_override("panel",_texture_style("res://assets/ui/panels/small_stone.png",28))
 	var alert_margin := MarginContainer.new(); alert_margin.add_theme_constant_override("margin_left",42); alert_margin.add_theme_constant_override("margin_right",42); alert_margin.add_theme_constant_override("margin_top",20); alert_margin.add_theme_constant_override("margin_bottom",20); message_panel.add_child(alert_margin)
 	var alert_row := HBoxContainer.new(); alert_row.alignment = BoxContainer.ALIGNMENT_CENTER; alert_row.add_theme_constant_override("separation",14); alert_margin.add_child(alert_row)
-	var alert_icon := TextureRect.new(); alert_icon.texture = load("res://assets/ui/icons/alert_error.png"); alert_icon.custom_minimum_size = Vector2(44,44); alert_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; alert_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; alert_row.add_child(alert_icon)
+	var alert_icon := TextureRect.new(); alert_icon.texture = visual_assets.alert_error; alert_icon.custom_minimum_size = Vector2(44,44); alert_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; alert_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; alert_row.add_child(alert_icon)
 	message_label = Label.new(); message_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; message_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; message_label.add_theme_color_override("font_color",Color("fff1d0")); message_label.add_theme_font_size_override("font_size",17); alert_row.add_child(message_label); panel_stack.add_child(message_panel)
-	back_button = Button.new(); back_button.text = LocalizationService.tr_key("auth.back"); back_button.icon = load("res://assets/ui/cursors/back_arrow.png"); back_button.expand_icon = false; back_button.add_theme_constant_override("icon_max_width",16); back_button.custom_minimum_size = Vector2(150,44); back_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; _style_action_button(back_button,false); back_button.visible = false; back_button.pressed.connect(_show_landing); panel_stack.add_child(back_button)
+	back_button = Button.new(); back_button.text = LocalizationService.tr_key("auth.back"); back_button.icon = visual_assets.back_arrow; back_button.expand_icon = false; back_button.add_theme_constant_override("icon_max_width",16); back_button.custom_minimum_size = Vector2(150,44); back_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; _style_action_button(back_button,false); back_button.visible = false; back_button.pressed.connect(_show_landing); panel_stack.add_child(back_button)
 	global_controls_layer = Control.new(); global_controls_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); global_controls_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE; global_controls_layer.z_index = 50; add_child(global_controls_layer)
 	_create_music_toggle(); _setup_locale_selector()
 
@@ -222,7 +225,7 @@ func _toggle_home_music() -> void:
 func _update_music_toggle() -> void:
 	if not is_instance_valid(music_toggle_button): return
 	var playing := is_instance_valid(settings_store) and settings_store.music_enabled
-	music_toggle_button.icon = load("res://assets/ui/icons/music_enabled.png" if playing else "res://assets/ui/icons/music_disabled.png"); music_toggle_button.tooltip_text = LocalizationService.tr_key("music.pause" if playing else "music.play")
+	music_toggle_button.icon = visual_assets.music_enabled if playing else visual_assets.music_disabled; music_toggle_button.tooltip_text = LocalizationService.tr_key("music.pause" if playing else "music.play")
 
 func _toggle_password_visibility(visible: bool) -> void:
 	password_input.secret = not visible
@@ -232,7 +235,7 @@ func _update_password_visibility_icon() -> void:
 	if not is_instance_valid(password_visibility_button) or not is_instance_valid(password_input):
 		return
 	var visible := not password_input.secret
-	var texture := load("res://assets/ui/cursors/password_eye_visible.png" if visible else "res://assets/ui/cursors/password_eye_hidden.png") as Texture2D
+	password_visibility_button.configure_icons(visual_assets.password_eye_visible, visual_assets.password_eye_hidden)
 	password_visibility_button.call("set_revealed", visible)
 func _toggle_mode() -> void: _open_auth(not register_mode)
 
@@ -316,7 +319,7 @@ func _start_new_game() -> void:
 	if is_instance_valid(verification): verification.queue_free()
 	if is_instance_valid(welcome): welcome.queue_free()
 	if is_instance_valid(gameplay_view): gameplay_view.queue_free()
-	gameplay_view = GameplayView.new(); add_child(gameplay_view); gameplay_view.main_menu_requested.connect(_on_gameplay_main_menu_requested); gameplay_view.logout_requested.connect(_on_gameplay_logout_requested); gameplay_view.exit_requested.connect(_on_gameplay_exit_requested); gameplay_view.setup(game_runtime, settings_store)
+	gameplay_view = GameplayView.new(); add_child(gameplay_view); gameplay_view.main_menu_requested.connect(_on_gameplay_main_menu_requested); gameplay_view.logout_requested.connect(_on_gameplay_logout_requested); gameplay_view.exit_requested.connect(_on_gameplay_exit_requested); gameplay_view.setup(game_runtime, settings_store, visual_assets)
 
 func _on_gameplay_main_menu_requested() -> void:
 	_stop_combat_music()
@@ -377,7 +380,7 @@ func _show_welcome(alias := "") -> void:
 	welcome = WelcomeView.new()
 	welcome.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	welcome.z_index = 5
-	welcome.setup(display_alias)
+	welcome.setup(display_alias, visual_assets)
 	welcome.enter_requested.connect(_start_new_game)
 	welcome.logout_requested.connect(func(): auth.logout(); _show_landing())
 	parchment_panel.add_child(welcome)
@@ -391,7 +394,7 @@ func _show_session_loader() -> void:
 	parchment_panel.add_child(session_loader)
 	var column := VBoxContainer.new(); column.alignment = BoxContainer.ALIGNMENT_CENTER; column.add_theme_constant_override("separation", 16); session_loader.add_child(column)
 	var label := Label.new(); label.text = LocalizationService.tr_key("session.restoring"); label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; label.add_theme_font_size_override("font_size", 24); label.add_theme_color_override("font_color", Color("321c12")); column.add_child(label)
-	session_loader_frames = [load("res://assets/ui/cursors/loader_hourglass_1.png") as Texture2D, load("res://assets/ui/cursors/loader_hourglass_2.png") as Texture2D, load("res://assets/ui/cursors/loader_hourglass_3.png") as Texture2D]
+	session_loader_frames = [visual_assets.loader_hourglass_1, visual_assets.loader_hourglass_2, visual_assets.loader_hourglass_3]
 	var loader_icon := TextureRect.new(); loader_icon.texture = session_loader_frames[0]; loader_icon.custom_minimum_size = Vector2(48,48); loader_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; loader_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; loader_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; column.add_child(loader_icon)
 	session_loader_timer = Timer.new(); session_loader_timer.wait_time = 0.3; session_loader_timer.timeout.connect(func():
 		if is_instance_valid(loader_icon) and session_loader_frames.size() > 0:

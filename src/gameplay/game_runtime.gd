@@ -90,12 +90,21 @@ func _block_outer_border() -> void:
 		grid.block(Vector2i(GridModel.WIDTH - 1, y))
 
 func _block_restricted_zones() -> void:
-	# Fixed V1 spawn/end areas. They are tracked separately from walkability so
-	# the route can still traverse its special spawn and endpoint cells.
-	for y in range(1, 8):
-		for x in range(1, 11): grid.restrict(Vector2i(x, y))
-	for y in range(27, GridModel.HEIGHT):
-		for x in range(28, GridModel.WIDTH): grid.restrict(Vector2i(x, y))
+	# Fixed V1 spawn/end areas. Coordinates in the design document are
+	# one-based; GridModel is zero-based, so the lower block's (29,28)-(36,36)
+	# design rectangle becomes x=28..35, y=27..35 here. They are tracked
+	# separately from walkability so the route can still traverse their special
+	# spawn and endpoint cells.
+	const SPAWN_RESTRICTED_MIN := Vector2i(1, 1)
+	const SPAWN_RESTRICTED_MAX := Vector2i(10, 7)
+	const END_RESTRICTED_MIN := Vector2i(28, 27)
+	const END_RESTRICTED_MAX := Vector2i(GridModel.WIDTH - 1, GridModel.HEIGHT - 1)
+	for y in range(SPAWN_RESTRICTED_MIN.y, SPAWN_RESTRICTED_MAX.y + 1):
+		for x in range(SPAWN_RESTRICTED_MIN.x, SPAWN_RESTRICTED_MAX.x + 1):
+			grid.restrict(Vector2i(x, y))
+	for y in range(END_RESTRICTED_MIN.y, END_RESTRICTED_MAX.y + 1):
+		for x in range(END_RESTRICTED_MIN.x, END_RESTRICTED_MAX.x + 1):
+			grid.restrict(Vector2i(x, y))
 
 func start_first_wave() -> bool:
 	if wave == null or wave.is_active(): return false

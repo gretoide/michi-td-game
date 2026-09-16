@@ -115,7 +115,7 @@ func select_board_gem(cell: Vector2i) -> GemInstance:
 	return gem
 
 func select_stone(cell: Vector2i) -> bool:
-	if phases == null or phases.phase not in [GamePhaseMachine.Phase.CONSTRUCTION, GamePhaseMachine.Phase.COMBAT] or not stones.has(cell): return false
+	if phases == null or phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or not stones.has(cell): return false
 	selected_stone_cell = cell; stone_selected.emit(cell); return true
 
 func can_place() -> bool:
@@ -170,7 +170,7 @@ func _placement_error(cell: Vector2i) -> StringName:
 	return &""
 
 func keep(gem: GemInstance) -> bool:
-	if gem == null or gem not in current_gems or placed_count() != MAX_PLACEMENTS:
+	if phases == null or phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or gem == null or gem not in current_gems or placed_count() != MAX_PLACEMENTS:
 		return false
 	selected_board_gem = gem
 	return _finalize_current(gem)
@@ -209,7 +209,7 @@ func basic_combinations() -> Array:
 	return result
 
 func combine_basic(selected: GemInstance, count: int) -> GemInstance:
-	if selected == null or placed_count() != MAX_PLACEMENTS or count not in [2, 4]: return null
+	if phases == null or phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or selected == null or placed_count() != MAX_PLACEMENTS or count not in [2, 4]: return null
 	selected_board_gem = selected
 	var candidates: Array = []
 	for gem in current_gems:
@@ -253,18 +253,9 @@ func find_construction_options(selected: GemInstance) -> Array:
 	return result
 
 func find_board_options(selected: GemInstance) -> Array:
-	if selected == null or phases == null or phases.phase != GamePhaseMachine.Phase.COMBAT: return []
-	var result: Array = []
-	for option in find_advanced_matches():
-		if selected in option.gems:
-			var contextual: Dictionary = option.duplicate()
-			contextual["kind"] = &"recipe"
-			contextual["pool"] = &"board"
-			contextual["one_shot"] = false
-			contextual["result_id"] = contextual.recipe.result_id
-			contextual["max_required_level"] = max_required_level(contextual.recipe)
-			result.append(contextual)
-	return result
+	# Board combinations are construction actions; combat only selects and
+	# controls towers/enemies.
+	return []
 
 func contextual_combinations(selected: GemInstance) -> Array:
 	if phases != null and phases.phase == GamePhaseMachine.Phase.CONSTRUCTION:
@@ -289,11 +280,8 @@ func max_required_level(recipe: RecipeDefinition) -> int:
 	return maximum
 
 func execute_recipe(recipe: RecipeDefinition, selected: GemInstance, one_shot := false) -> GemInstance:
-	if recipe == null or selected == null: return null
-	if one_shot:
-		if phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or placed_count() != MAX_PLACEMENTS: return null
-	else:
-		if phases.phase != GamePhaseMachine.Phase.COMBAT: return null
+	if phases == null or phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or not one_shot or recipe == null or selected == null: return null
+	if placed_count() != MAX_PLACEMENTS: return null
 	var scope := current_gems if one_shot else board_gems
 	var ingredients := matcher.match_recipe(recipe, scope)
 	if ingredients.is_empty() or selected not in ingredients: return null

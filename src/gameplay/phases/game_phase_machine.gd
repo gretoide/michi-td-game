@@ -5,8 +5,8 @@ signal phase_exited(phase: Phase)
 signal phase_entered(phase: Phase)
 
 enum Phase { CONSTRUCTION, COMBAT }
-const CONSTRUCTION_ACTIONS := [&"place_gem", &"keep", &"combine", &"remove_stone", &"degrade"]
-const COMBAT_ACTIONS := [&"attack", &"stop", &"combine", &"remove_stone", &"degrade"]
+const CONSTRUCTION_ACTIONS := [&"place_gem", &"keep", &"combine", &"remove_stone", &"degrade", &"toggle_attack"]
+const COMBAT_ACTIONS := [&"attack", &"stop"]
 
 var phase := Phase.CONSTRUCTION
 var wave_number := 1

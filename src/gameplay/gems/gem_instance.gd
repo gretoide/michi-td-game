@@ -9,6 +9,9 @@ var quality: Quality
 var cell := Vector2i(-1, -1)
 var round_id := 0
 var mvp_level := 0
+# Persistent per-board preference.  It is copied into the runtime tower when
+# the next combat phase is created.
+var attack_enabled := true
 
 func _init(gem_id: StringName = &"", gem_level: int = 1, gem_quality: Quality = Quality.CHIPPED) -> void:
 	id = gem_id
@@ -20,6 +23,7 @@ func clone() -> GemInstance:
 	result.cell = cell
 	result.round_id = round_id
 	result.mvp_level = mvp_level
+	result.attack_enabled = attack_enabled
 	return result
 
 func is_on_board() -> bool:

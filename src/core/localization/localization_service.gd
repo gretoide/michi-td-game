@@ -49,7 +49,7 @@ const EXTRA_CATALOG := {
         ,"password.show": "Show password", "password.hide": "Hide password",
         "game.phase.construction": "Construction", "game.phase.combat": "Combat", "game.phase.victory": "Victory", "game.phase.defeat": "Defeat",
         "game.wave": "Wave {number}", "game.pause": "Pause", "game.pause.title": "Game paused", "game.pause.message": "The game is paused.", "game.pause.resume": "Resume", "game.pause.main_menu": "Main menu", "game.pause.logout": "Log out", "game.pause.exit": "Exit game", "game.pause.confirm_main_menu": "Return to main menu?", "game.pause.confirm_logout": "Log out?", "game.pause.confirm_exit": "Exit the game?", "game.pause.confirm_message": "Your current construction will be abandoned.", "game.pause.confirm": "Continue", "game.pause.cancel": "Cancel", "game.resources.life": "Life", "game.resources.gold": "Gold", "game.resources.full": "Life {life}/{max_life} | Gold {gold} | XP {xp} | Quality {quality} | Progress {progress}", "game.resources.compact": "Life {life}/{max_life} · Gold {gold} · XP {xp} · Q {quality} · {progress}%",
-        "game.command.title": "Command card", "game.command.place_gem": "Place", "game.command.select_gem": "Select", "game.command.combine": "Combine", "game.command.degrade": "Degrade", "game.command.remove_stone": "Remove stone", "game.command.attack": "Attack", "game.command.stop": "Stop", "game.command.recipes": "Recipes", "game.command.keep_gem": "Keep", "game.command.debug": "Debug", "game.command.settings": "Settings", "game.command.restart": "Restart",
+        "game.command.title": "Command card", "game.command.place_gem": "Place", "game.command.select_gem": "Select", "game.command.combine": "Combine", "game.command.degrade": "Degrade", "game.command.remove_stone": "Remove stone", "game.command.attack": "Attack", "game.command.stop": "Stop", "game.command.activate": "Activate", "game.command.recipes": "Recipes", "game.command.keep_gem": "Keep", "game.command.debug": "Debug", "game.command.settings": "Settings", "game.command.restart": "Restart",
         "game.selection.none": "Nothing selected", "game.selection.selected": "Selected: {kind}", "game.selection.gem": "Gem {id} | Level {level} | Quality {quality} | Cell {cell}", "game.selection.enemy": "Enemy {id} | HP {hp}/{max_hp} | Armor {armor} | MR {magic}", "game.selection.tower": "Gem {id} | Damage {damage} | Range {range} | Stopped: {stopped}", "game.selection.stone": "Stone selected", "game.feedback.help": "Click a cell to place or select a gem.", "game.feedback.place_hint": "Choose an empty cell on the map.", "game.feedback.select_hint": "Click a gem or enemy to inspect it.", "game.feedback.no_combination": "No valid combination for this selection.", "game.feedback.invalid_action": "This action is not available.",
         "game.recipes.title": "Known recipes", "game.recipes.color.all": "All colors", "game.recipes.color.blue": "Blue", "game.recipes.color.dark_blue": "Dark blue", "game.recipes.color.gold": "Gold", "game.recipes.color.light_green": "Green", "game.recipes.color.lilac": "Lilac", "game.recipes.color.purple": "Purple", "game.recipes.color.red": "Red", "game.recipes.color.turquoise": "Turquoise", "game.close": "Close", "game.reward.title": "Reward after wave {wave}", "game.reward.skill.fixed_hammer": "Fixed hammer", "game.reward.skill.reroll": "Reroll", "game.reward.skill.swap": "Swap", "game.reward.skill.checkpoint_maker": "Checkpoint maker", "game.reward.skill.curar": "Heal", "game.end.victory": "Victory", "game.end.defeat": "Defeat", "game.end.score": "Final score: {score}", "game.restart": "Restart", "game.settings.title": "Settings", "game.settings.fullscreen": "Fullscreen", "game.settings.music_enabled": "Music on", "game.settings.music": "Music volume", "game.settings.sfx": "Effects volume", "game.settings.text_size": "Text size", "game.settings.text_small": "Small", "game.settings.text_normal": "Normal", "game.settings.text_large": "Large", "game.debug.title": "Debug information", "game.debug.info": "Seed: {seed}\nCatalog: {gems} gems · {recipes} recipes · {waves} waves",
         "game.harness.title": "Construction harness", "game.harness.select": "Select Gem", "game.harness.select_gem": "Select gem", "game.harness.place": "Place Gem", "game.harness.combine": "Combine basic", "game.harness.degrade": "Degrade", "game.harness.degrade_hint": "Select a non-Chipped gem", "game.harness.remove": "Remove Stone", "game.harness.status": "Gems {gems}/5 | Stones {stones} | Phase {phase}", "game.harness.rejected": "Rejected: {code}", "game.harness.finalized": "Construction finalized", "game.combat.summary": "Gems {towers} | Enemies {enemies} | Projectiles {projectiles}", "game.resources": "Life {life} | Gold {gold} | XP {xp} | Progress {progress}"
@@ -76,7 +76,7 @@ const EXTRA_CATALOG := {
         ,"password.show": "Mostrar contraseña", "password.hide": "Ocultar contraseña",
         "game.phase.construction": "Construcción", "game.phase.combat": "Combate", "game.phase.victory": "Victoria", "game.phase.defeat": "Derrota",
         "game.wave": "Oleada {number}", "game.pause": "Pausa", "game.pause.title": "Partida pausada", "game.pause.message": "La partida está en pausa.", "game.pause.resume": "Continuar", "game.pause.main_menu": "Menú principal", "game.pause.logout": "Cerrar sesión", "game.pause.exit": "Salir del juego", "game.pause.confirm_main_menu": "¿Volver al menú principal?", "game.pause.confirm_logout": "¿Cerrar sesión?", "game.pause.confirm_exit": "¿Salir del juego?", "game.pause.confirm_message": "La construcción actual se va a abandonar.", "game.pause.confirm": "Continuar", "game.pause.cancel": "Cancelar", "game.resources.life": "Vida", "game.resources.gold": "Oro", "game.resources.full": "Vida {life}/{max_life} | Oro {gold} | XP {xp} | Calidad {quality} | Progreso {progress}", "game.resources.compact": "Vida {life}/{max_life} · Oro {gold} · XP {xp} · C {quality} · {progress}%",
-        "game.command.title": "Carta de comandos", "game.command.place_gem": "Colocar", "game.command.select_gem": "Seleccionar", "game.command.combine": "Combinar", "game.command.degrade": "Degradar", "game.command.remove_stone": "Quitar piedra", "game.command.attack": "Atacar", "game.command.stop": "Detener", "game.command.recipes": "Recetas", "game.command.keep_gem": "Conservar", "game.command.debug": "Debug", "game.command.settings": "Ajustes", "game.command.restart": "Reiniciar",
+        "game.command.title": "Carta de comandos", "game.command.place_gem": "Colocar", "game.command.select_gem": "Seleccionar", "game.command.combine": "Combinar", "game.command.degrade": "Degradar", "game.command.remove_stone": "Quitar piedra", "game.command.attack": "Atacar", "game.command.stop": "Detener", "game.command.activate": "Activar", "game.command.recipes": "Recetas", "game.command.keep_gem": "Conservar", "game.command.debug": "Debug", "game.command.settings": "Ajustes", "game.command.restart": "Reiniciar",
         "game.selection.none": "Nada seleccionado", "game.selection.selected": "Seleccionado: {kind}", "game.selection.gem": "Gema {id} | Nivel {level} | Calidad {quality} | Celda {cell}", "game.selection.enemy": "Enemigo {id} | HP {hp}/{max_hp} | Armadura {armor} | MR {magic}", "game.selection.tower": "Gema {id} | Daño {damage} | Rango {range} | Detenida: {stopped}", "game.selection.stone": "Piedra seleccionada", "game.feedback.help": "Hacé click en una celda para colocar o seleccionar una gema.", "game.feedback.place_hint": "Elegí una celda libre del mapa.", "game.feedback.select_hint": "Hacé click en una gema o enemigo para inspeccionarlo.", "game.feedback.no_combination": "No hay una combinación válida para esta selección.", "game.feedback.invalid_action": "Esta acción no está disponible.",
         "game.recipes.title": "Recetas conocidas", "game.recipes.color.all": "Todos los colores", "game.recipes.color.blue": "Azul", "game.recipes.color.dark_blue": "Azul oscuro", "game.recipes.color.gold": "Dorado", "game.recipes.color.light_green": "Verde", "game.recipes.color.lilac": "Lila", "game.recipes.color.purple": "Violeta", "game.recipes.color.red": "Rojo", "game.recipes.color.turquoise": "Turquesa", "game.close": "Cerrar", "game.reward.title": "Recompensa después de la oleada {wave}", "game.reward.skill.fixed_hammer": "Martillo fijo", "game.reward.skill.reroll": "Volver a tirar", "game.reward.skill.swap": "Intercambiar", "game.reward.skill.checkpoint_maker": "Crear punto de control", "game.reward.skill.curar": "Curar", "game.end.victory": "Victoria", "game.end.defeat": "Derrota", "game.end.score": "Puntaje final: {score}", "game.restart": "Reiniciar", "game.settings.title": "Configuración", "game.settings.fullscreen": "Pantalla completa", "game.settings.music_enabled": "Música activada", "game.settings.music": "Volumen de música", "game.settings.sfx": "Volumen de efectos", "game.settings.text_size": "Tamaño del texto", "game.settings.text_small": "Pequeño", "game.settings.text_normal": "Normal", "game.settings.text_large": "Grande", "game.debug.title": "Información de depuración", "game.debug.info": "Semilla: {seed}\nCatálogo: {gems} gemas · {recipes} recetas · {waves} oleadas",
         "game.harness.title": "Panel de construcción", "game.harness.select": "Seleccionar gema", "game.harness.select_gem": "Seleccioná una gema", "game.harness.place": "Colocar gema", "game.harness.combine": "Combinar básica", "game.harness.degrade": "Degradar", "game.harness.degrade_hint": "Seleccioná una gema no Chipped", "game.harness.remove": "Eliminar piedra", "game.harness.status": "Gemas {gems}/5 | Piedras {stones} | Fase {phase}", "game.harness.rejected": "Rechazado: {code}", "game.harness.finalized": "Construcción finalizada", "game.combat.summary": "Gemas {towers} | Enemigos {enemies} | Proyectiles {projectiles}", "game.resources": "Vida {life} | Oro {gold} | XP {xp} | Progreso {progress}"
@@ -100,12 +100,23 @@ func _init() -> void:
     _catalog["en"].merge({
         "game.player.level": "Level {level}",
         "game.player.xp": "XP {xp} / next {next}",
+        "game.player.xp_percent": "XP {percent}%",
+        "game.player.progress": "Progress",
+        "game.player.quality_probabilities": "Gem quality probabilities · Level {level}",
+        "game.state.attack_enabled": "Attack enabled",
+        "game.state.attack_disabled": "Attack disabled",
+        "game.ability.cleave": "Area hit on nearby enemies (50% damage)",
+        "game.ability.split": "Hits {level} additional target(s)",
+        "game.ability.poison": "Applies damage over time",
+        "game.ability.slow": "Slows the target",
         "game.zoom": "Zoom",
         "game.inspector.tower.title": "Selected tower",
         "game.inspector.enemy.title": "Selected enemy",
         "game.inspector.stone.title": "Selected stone",
         "game.inspector.tower.stats": "• Level: {level}\n• Damage: {damage}\n• Range: {range}\n• Attack speed: {speed}\n• Abilities: {abilities}",
         "game.inspector.enemy.stats": "• HP: {hp} / {max_hp}\n• Armor: {armor}\n• Magic resistance: {magic}"
+		, "game.command.attack_enabled": "Do not attack"
+		, "game.command.attack_disabled": "Attack"
 		, "game.inspector.combinations.none": "• No valid combinations for this selection"
 		, "game.inspector.combinations.available": "• Available combinations: {list}"
 		, "game.combinations.title": "Available combinations"
@@ -126,12 +137,23 @@ func _init() -> void:
     _catalog["es"].merge({
         "game.player.level": "Nivel {level}",
         "game.player.xp": "XP {xp} / próximo {next}",
+        "game.player.xp_percent": "XP {percent}%",
+        "game.player.progress": "Progreso",
+        "game.player.quality_probabilities": "Probabilidades de calidad · Nivel {level}",
+        "game.state.attack_enabled": "Ataque activado",
+        "game.state.attack_disabled": "Ataque desactivado",
+        "game.ability.cleave": "Golpea en área a enemigos cercanos (50% de daño)",
+        "game.ability.split": "Golpea {level} objetivo(s) adicional(es)",
+        "game.ability.poison": "Aplica daño en el tiempo",
+        "game.ability.slow": "Ralentiza al objetivo",
         "game.zoom": "Zoom",
         "game.inspector.tower.title": "Torre seleccionada",
         "game.inspector.enemy.title": "Enemigo seleccionado",
         "game.inspector.stone.title": "Piedra seleccionada",
         "game.inspector.tower.stats": "• Nivel: {level}\n• Daño: {damage}\n• Rango: {range}\n• Velocidad de ataque: {speed}\n• Habilidades: {abilities}",
         "game.inspector.enemy.stats": "• HP: {hp} / {max_hp}\n• Armadura: {armor}\n• Resistencia mágica: {magic}"
+		, "game.command.attack_enabled": "No atacar"
+		, "game.command.attack_disabled": "Atacar"
 		, "game.inspector.combinations.none": "• No hay combinaciones válidas para esta selección"
 		, "game.inspector.combinations.available": "• Combinaciones disponibles: {list}"
 		, "game.combinations.title": "Combinaciones disponibles"

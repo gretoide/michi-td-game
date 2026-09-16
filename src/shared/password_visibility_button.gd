@@ -2,6 +2,14 @@ class_name PasswordVisibilityButton
 extends Button
 
 var revealed := false
+var eye_visible_texture: Texture2D
+var eye_hidden_texture: Texture2D
+
+func configure_icons(visible_texture: Texture2D, hidden_texture: Texture2D) -> void:
+    eye_visible_texture = visible_texture
+    eye_hidden_texture = hidden_texture
+    if is_inside_tree():
+        _update_icon()
 
 func _ready() -> void:
     text = ""
@@ -31,5 +39,5 @@ func set_revealed(value: bool) -> void:
     _update_icon()
 
 func _update_icon() -> void:
-    icon = load("res://assets/ui/cursors/password_eye_visible.png" if revealed else "res://assets/ui/cursors/password_eye_hidden.png") as Texture2D
+    icon = eye_visible_texture if revealed else eye_hidden_texture
     tooltip_text = LocalizationService.tr_key("password.hide" if revealed else "password.show")

@@ -10,7 +10,7 @@ extends Node2D
 @export var snap_to_grid := true
 @export_range(8.0, 64.0, 1.0) var marker_radius := 18.0
 
-const CELL_SIZE := 100.0
+const CELL_SIZE := 16.0
 
 func _ready() -> void:
 	_sync_cell_position()
@@ -40,4 +40,3 @@ func _draw() -> void:
 	draw_line(Vector2(0, -marker_radius * 0.65), Vector2(0, marker_radius * 0.65), Color.WHITE, 2.0)
 	if not point_label.is_empty():
 		draw_string(ThemeDB.fallback_font, Vector2(marker_radius + 6.0, 5.0), point_label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18, Color.WHITE)
-

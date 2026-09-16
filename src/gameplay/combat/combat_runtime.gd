@@ -48,6 +48,9 @@ func tick(delta: float) -> void:
 		enemy.tick_abilities(delta)
 		enemy.move_along_path(delta)
 	for tower in towers:
+		if not tower.attack_enabled:
+			tower.disarmed = false
+			continue
 		tower.disarmed = false
 		for enemy in enemies:
 			if enemy.is_alive() and enemy.disarm_aura_radius > 0.0 and tower.position.distance_to(enemy.position) <= enemy.disarm_aura_radius:
@@ -66,7 +69,33 @@ func _execute_tower_abilities(projectile: HomingProjectile) -> void:
 	var target := projectile.target
 	for ability in projectile.ability_ids:
 		var key := str(ability).to_lower()
-		if key == "slow": effect_system.apply_slow(target, projectile.source_gem_id, 20.0, 1.5)
+		if key == "cleave": _apply_cleave(projectile)
+		elif key == "split": _apply_split(projectile)
+		elif key == "slow": effect_system.apply_slow(target, projectile.source_gem_id, 20.0, 1.5)
 		elif key == "poison": effect_system.apply_poison(target, projectile.source_gem_id, maxf(target.max_hp * 0.01, 1.0), 1.0)
 		elif key == "burn": effect_system.apply_burn(target, projectile.source_gem_id, maxf(target.max_hp * 0.01, 1.0), 1.0)
 		elif key == "stone_gaze": effect_system.apply_stone_gaze(target, projectile.source_gem_id, 1.0)
+
+func _apply_cleave(projectile: HomingProjectile) -> void:
+	var target := projectile.target
+	for enemy: EnemyRuntime in enemies:
+		if enemy == target or not enemy.is_alive() or target.position.distance_to(enemy.position) > 150.0: continue
+		var context := _ability_damage_context(projectile, 0.5)
+		enemy.apply_damage(DamagePipeline.resolve(context, enemy))
+
+func _apply_split(projectile: HomingProjectile) -> void:
+	var candidates: Array[EnemyRuntime] = []
+	for enemy: EnemyRuntime in enemies:
+		if enemy != projectile.target and enemy != null and enemy.is_alive(): candidates.append(enemy)
+	candidates.sort_custom(func(a: EnemyRuntime, b: EnemyRuntime): return projectile.target.position.distance_to(a.position) < projectile.target.position.distance_to(b.position))
+	var hits := mini(projectile.ability_level, candidates.size())
+	for index in hits:
+		var context := _ability_damage_context(projectile, 1.0)
+		candidates[index].apply_damage(DamagePipeline.resolve(context, candidates[index]))
+
+func _ability_damage_context(projectile: HomingProjectile, multiplier: float) -> DamagePipeline.DamageContext:
+	var context := DamagePipeline.DamageContext.new()
+	context.base_damage = projectile.payload.base_damage
+	context.damage_type = projectile.payload.damage_type
+	context.multiplier = multiplier
+	return context

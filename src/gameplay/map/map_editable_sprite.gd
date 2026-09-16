@@ -15,7 +15,7 @@ extends Sprite2D
 		texture = value
 @export var snap_to_grid := true
 
-const CELL_SIZE := 100.0
+const CELL_SIZE := 16.0
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -35,4 +35,3 @@ func _sync_cell_position() -> void:
 	if not is_inside_tree() or not snap_to_grid:
 		return
 	position = Vector2(cell) * CELL_SIZE + Vector2.ONE * CELL_SIZE * 0.5
-

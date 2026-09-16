@@ -1,26 +1,26 @@
 extends Node
 
-const NORMAL_CURSOR := "res://assets/ui/cursors/cursor_normal.png"
-const CLICK_CURSOR := "res://assets/ui/cursors/cursor_click.png"
-const TEXT_CURSOR := "res://assets/ui/cursors/tile_0140.png"
-const CONSTRUCTION_CURSOR := "res://assets/ui/cursors/tile_0108.png"
-const LOADER_FRAMES := [
-    "res://assets/ui/cursors/loader_cursor_1.png",
-    "res://assets/ui/cursors/loader_cursor_2.png",
-]
-const CURSOR_SIZE := 20
 var _texture_cache: Dictionary = {}
+var visual_assets: VisualAssetConfig
 
 var _busy := false
 var _loader_index := 0
 var _loader_timer: Timer
 
 func _ready() -> void:
+    if visual_assets == null:
+        visual_assets = VisualAssetConfig.new()
     _loader_timer = Timer.new()
     _loader_timer.wait_time = 0.22
     _loader_timer.timeout.connect(_advance_loader)
     add_child(_loader_timer)
     _apply_normal()
+
+func configure(value: VisualAssetConfig) -> void:
+    visual_assets = value if value != null else VisualAssetConfig.new()
+    _texture_cache.clear()
+    if is_inside_tree():
+        _apply_normal()
 
 func set_clickable(control: Control) -> void:
     control.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -31,9 +31,9 @@ func set_text_cursor(control: Control) -> void:
 
 func set_construction_cursor(active: bool) -> void:
     if active:
-        var texture := _scaled_texture(CONSTRUCTION_CURSOR)
+        var texture := _scaled_texture(visual_assets.cursor_construction, "construction")
         if texture != null:
-            Input.set_custom_mouse_cursor(texture, Input.CURSOR_ARROW, Vector2(1, 1))
+            Input.set_custom_mouse_cursor(texture, Input.CURSOR_ARROW, visual_assets.cursor_construction_hotspot)
             Input.set_default_cursor_shape(Input.CURSOR_ARROW)
     else:
         _apply_normal()
@@ -64,37 +64,38 @@ func set_busy(busy: bool) -> void:
         _apply_normal()
 
 func _advance_loader() -> void:
-    _loader_index = (_loader_index + 1) % LOADER_FRAMES.size()
+    _loader_index = (_loader_index + 1) % 2
     _apply_loader()
 
 func _apply_normal() -> void:
-    var normal_texture := _scaled_texture(NORMAL_CURSOR)
-    var click_texture := _scaled_texture(CLICK_CURSOR)
+    var normal_texture := _scaled_texture(visual_assets.cursor_normal, "normal")
+    var click_texture := _scaled_texture(visual_assets.cursor_click, "click")
     if normal_texture == null or click_texture == null:
         return
-    Input.set_custom_mouse_cursor(normal_texture, Input.CURSOR_ARROW, Vector2(2, 2))
-    Input.set_custom_mouse_cursor(click_texture, Input.CURSOR_POINTING_HAND, Vector2(2, 2))
-    var text_texture := _scaled_texture(TEXT_CURSOR)
+    Input.set_custom_mouse_cursor(normal_texture, Input.CURSOR_ARROW, visual_assets.cursor_normal_hotspot)
+    Input.set_custom_mouse_cursor(click_texture, Input.CURSOR_POINTING_HAND, visual_assets.cursor_click_hotspot)
+    var text_texture := _scaled_texture(visual_assets.cursor_text, "text")
     if text_texture != null:
-        Input.set_custom_mouse_cursor(text_texture, Input.CURSOR_IBEAM, Vector2(8, 8))
+        Input.set_custom_mouse_cursor(text_texture, Input.CURSOR_IBEAM, visual_assets.cursor_text_hotspot)
     Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 
 func _apply_loader() -> void:
-    var texture := _scaled_texture(LOADER_FRAMES[_loader_index])
+    var source := visual_assets.cursor_loader_1 if _loader_index == 0 else visual_assets.cursor_loader_2
+    var texture := _scaled_texture(source, "loader_%d" % _loader_index)
     if texture == null:
         return
-    Input.set_custom_mouse_cursor(texture, Input.CURSOR_ARROW, Vector2(10, 10))
-    Input.set_custom_mouse_cursor(texture, Input.CURSOR_POINTING_HAND, Vector2(10, 10))
+    Input.set_custom_mouse_cursor(texture, Input.CURSOR_ARROW, visual_assets.cursor_loader_hotspot)
+    Input.set_custom_mouse_cursor(texture, Input.CURSOR_POINTING_HAND, visual_assets.cursor_loader_hotspot)
     Input.set_default_cursor_shape(Input.CURSOR_BUSY)
 
-func _scaled_texture(path: String) -> Texture2D:
-    if _texture_cache.has(path):
-        return _texture_cache[path]
-    var source := load(path) as Texture2D
+func _scaled_texture(source: Texture2D, cache_key: String) -> Texture2D:
     if source == null:
         return null
+    if _texture_cache.has(cache_key):
+        return _texture_cache[cache_key]
     var image := source.get_image()
-    image.resize(CURSOR_SIZE, CURSOR_SIZE, Image.INTERPOLATE_NEAREST)
+    var target_size := maxi(1, visual_assets.cursor_size)
+    image.resize(target_size, target_size, Image.INTERPOLATE_NEAREST)
     var texture := ImageTexture.create_from_image(image)
-    _texture_cache[path] = texture
+    _texture_cache[cache_key] = texture
     return texture

@@ -13,9 +13,18 @@ var targeting := TargetController.new()
 var cooldown := 0.0
 var stopped := false
 var disarmed := false
+var attack_enabled := true
 
 func setup(value_gem: GemInstance, definition: GemDefinition, world_position := Vector2.ZERO) -> void:
-	gem = value_gem; id = gem.id; position = world_position; stats = TowerCombatStats.from_gem(gem, definition); abilities = _abilities_for(definition); damage_type = _damage_type_for(definition)
+	gem = value_gem; id = gem.id; position = world_position; stats = TowerCombatStats.from_gem(gem, definition); abilities = _abilities_for(definition); damage_type = _damage_type_for(definition); attack_enabled = gem.attack_enabled
+
+func toggle_attack_enabled() -> void:
+	set_attack_enabled(not attack_enabled)
+
+func set_attack_enabled(value: bool) -> void:
+	attack_enabled = value
+	if gem != null: gem.attack_enabled = value
+	state_changed.emit()
 
 func _abilities_for(definition: GemDefinition) -> PackedStringArray:
 	var result := PackedStringArray()
@@ -53,4 +62,4 @@ func tick(delta: float, enemies: Array[EnemyRuntime], projectile_speed := 1000.0
 	var target := targeting.tick(position, stats.range_units, enemies)
 	if disarmed or target == null or cooldown > 0.0 or targeting.mode == TargetController.Mode.STOPPED: return null
 	var payload := DamagePipeline.DamageContext.new(); payload.base_damage = stats.damage; payload.damage_type = damage_type
-	var projectile := HomingProjectile.new(); projectile.setup(position, target, payload, projectile_speed, gem.id, abilities); cooldown = stats.attack_interval(); attack_started.emit(target, projectile); return projectile
+	var projectile := HomingProjectile.new(); projectile.setup(position, target, payload, projectile_speed, gem.id, abilities, gem.level); cooldown = stats.attack_interval(); attack_started.emit(target, projectile); return projectile

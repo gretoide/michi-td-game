@@ -1,6 +1,8 @@
 [gd_scene load_steps=2 format=3]
 
 [ext_resource path="res://src/main.gd" type="Script" id="1"]
+[ext_resource path="res://src/shared/visual_asset_config.tres" type="Resource" id="2_visual"]
 
 [node name="MichiTD" type="Node"]
 script = ExtResource("1")
+visual_assets = ExtResource("2_visual")

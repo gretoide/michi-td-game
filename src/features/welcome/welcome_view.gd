@@ -4,7 +4,8 @@ extends PanelContainer
 signal logout_requested
 signal enter_requested
 
-func setup(alias := "jugador") -> void:
+func setup(alias := "jugador", visual_assets: VisualAssetConfig = null) -> void:
+    var assets := visual_assets if visual_assets != null else VisualAssetConfig.new()
     custom_minimum_size = Vector2(0, 230)
     add_theme_stylebox_override("panel", StyleBoxEmpty.new())
     var margin := MarginContainer.new()
@@ -30,7 +31,7 @@ func setup(alias := "jugador") -> void:
     column.add_child(info)
     var enter := Button.new()
     enter.text = (localization.tr_key("welcome.enter") if localization != null else "Ingresar") + "  →"
-    enter.icon = load("res://assets/ui/icons/gameplay/main_menu.png")
+    enter.icon = assets.main_menu
     enter.expand_icon = true
     enter.custom_minimum_size = Vector2(300, 54)
     enter.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -47,7 +48,7 @@ func setup(alias := "jugador") -> void:
     column.add_child(enter)
     var logout := Button.new()
     logout.text = localization.tr_key("welcome.logout") if localization != null else "Cerrar sesión"
-    logout.icon = load("res://assets/ui/icons/gameplay/logout.png")
+    logout.icon = assets.logout
     logout.expand_icon = true
     logout.custom_minimum_size = Vector2(240, 44)
     logout.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
