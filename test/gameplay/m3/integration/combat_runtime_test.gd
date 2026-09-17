@@ -5,6 +5,7 @@ func run(suite: FoundationTestSuite) -> void:
 	_test_selection_before_placement(suite)
 	_test_game_runtime_starts_wave_after_keep(suite)
 	_test_refresh_enemy_paths_preserves_progress(suite)
+	_test_movement_type_uses_correct_route(suite)
 	_test_clear_projectiles_on_phase_end(suite)
 	_test_magic_gem_damages_physical_immune_enemy(suite)
 	_test_cleave_hits_nearby_enemy(suite)
@@ -36,6 +37,17 @@ func _test_refresh_enemy_paths_preserves_progress(suite: FoundationTestSuite) ->
 	suite.expect_equal(combat.path_cells.size(), 4, "combat stores the latest global route")
 	combat.tick(1.0)
 	suite.expect(enemy.position != position_before, "enemy continues moving on the refreshed route")
+
+func _test_movement_type_uses_correct_route(suite: FoundationTestSuite) -> void:
+	var profile := EnemyProfileDefinition.new(); profile.id = &"flying_path"; profile.movement_type = "Flying"; profile.base_speed = 100.0
+	var ground_route: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
+	var waypoints: Array[Vector2i] = [Vector2i(0, 0), Vector2i(2, 0)]
+	var combat := CombatRuntime.new(); combat.setup(1000.0, ground_route, waypoints)
+	var enemy := combat.spawn_enemy(profile, Vector2i(0, 0))
+	suite.expect_equal(enemy.path.size(), waypoints.size(), "flying enemies use ordered waypoints instead of ground cells")
+	var before := enemy.position
+	combat.tick(0.5)
+	suite.expect(enemy.position != before, "flying enemy advances along its waypoint route")
 
 func _test_clear_projectiles_on_phase_end(suite: FoundationTestSuite) -> void:
 	var profile := EnemyProfileDefinition.new(); profile.id = &"projectile_cleanup"; profile.hp = 100.0; profile.base_speed = 20.0

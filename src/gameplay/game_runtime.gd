@@ -27,6 +27,9 @@ var outcome: RefCounted
 var support_skills: RefCounted
 var support_rewards: RefCounted
 var wave_definitions: Array[WaveDefinition] = []
+var cached_ground_route: Array[Vector2i] = []
+var cached_waypoint_route: Array[Vector2i] = []
+var navigation_ready := false
 var current_wave_is_boss := false
 var player_state: Dictionary
 var outcome_state := "playing"
@@ -47,7 +50,8 @@ func initialize(seed: int = -1) -> PackedStringArray:
 		for error in loaded.errors: messages.append(str(error))
 		return messages
 	pathfinder = GroundPathfinder.new(grid)
-	if pathfinder.find_route(map).is_empty(): return PackedStringArray(["Initial Ground route is invalid"])
+	var initial_route := _calculate_navigation_snapshot()
+	if initial_route.is_empty(): return PackedStringArray(["Initial Ground route is invalid"])
 	phases = GamePhaseMachine.new(); phases.reset()
 	phases.phase_exited.connect(_on_phase_exited)
 	wave = WaveRuntime.new()
@@ -59,7 +63,10 @@ func initialize(seed: int = -1) -> PackedStringArray:
 	combat = CombatRuntime.new()
 	effects = EffectSystem.new()
 	combat.effect_system = effects
-	combat.setup(foundation.catalog.globals.projectile_speed, pathfinder.find_route(map))
+	# Cache both navigation variants after the map and construction grid are
+	# ready: ground enemies use every route cell, flying enemies use only the
+	# ordered spawn/checkpoint/endpoint waypoints.
+	combat.setup(foundation.catalog.globals.projectile_speed, cached_ground_route, cached_waypoint_route)
 	progress = ProgressRuntimeScript.new(); progress.reset()
 	economy = EconomyRuntimeScript.new(); economy.reset()
 	progression = PlayerProgressionRuntimeScript.new(); progression.reset()
@@ -108,9 +115,18 @@ func _block_restricted_zones() -> void:
 
 func start_first_wave() -> bool:
 	if wave == null or wave.is_active(): return false
+	# Resolve the complete route before changing phase or starting the wave.
+	# This is the gameplay snapshot every enemy in this wave will receive.
+	var prepared_route := pathfinder.find_route(map) if pathfinder != null and map != null else []
+	if prepared_route.is_empty():
+		navigation_ready = false
+		cached_ground_route.clear()
+		return false
 	if phases.phase == GamePhaseMachine.Phase.CONSTRUCTION:
 		phases.resolve_construction()
 	if phases.phase != GamePhaseMachine.Phase.COMBAT: return false
+	_set_navigation_snapshot(prepared_route)
+	combat.set_navigation_cache(cached_ground_route, cached_waypoint_route)
 	var definition := wave_definitions[phases.wave_number - 1] as WaveDefinition
 	var profile := foundation.catalog.enemy_profile_by_id(definition.enemy_profile_id) as EnemyProfileDefinition
 	if profile == null: return false
@@ -129,13 +145,18 @@ func tick(delta: float) -> void:
 
 func _on_wave_enemy_spawned(wave_enemy_id: int, profile: EnemyProfileDefinition) -> void:
 	var enemy := combat.spawn_enemy(profile, map.spawn)
-	if enemy != null:
-		var tier := floori((phases.wave_number - 1) / 10.0)
-		enemy.xp_reward = (3000 if current_wave_is_boss else 48) * int(pow(2, tier))
-		enemy.set_checkpoint_cells(map.checkpoints)
-		enemy.died.connect(func(): _on_enemy_resolved(enemy, wave_enemy_id, &"death"))
-		enemy.escaped.connect(func(): _on_enemy_resolved(enemy, wave_enemy_id, &"escaped"))
-		enemy.checkpoint_reached.connect(func(index: int): progress.on_checkpoint(index, current_wave_is_boss))
+	if enemy == null:
+		# This should be unreachable because start_first_wave validates the
+		# snapshot first. Resolve the reservation defensively so a bad debug
+		# spawn cannot leave WaveRuntime stuck forever.
+		wave.resolve_enemy(wave_enemy_id, &"escaped")
+		return
+	var tier := floori((phases.wave_number - 1) / 10.0)
+	enemy.xp_reward = (3000 if current_wave_is_boss else 48) * int(pow(2, tier))
+	enemy.set_checkpoint_cells(map.checkpoints)
+	enemy.died.connect(func(): _on_enemy_resolved(enemy, wave_enemy_id, &"death"))
+	enemy.escaped.connect(func(): _on_enemy_resolved(enemy, wave_enemy_id, &"escaped"))
+	enemy.checkpoint_reached.connect(func(index: int): progress.on_checkpoint(index, current_wave_is_boss))
 
 func _on_enemy_resolved(enemy: EnemyRuntime, wave_enemy_id: int, resolution: StringName) -> void:
 	if not wave.resolve_enemy(wave_enemy_id, resolution): return
@@ -153,10 +174,34 @@ func _sync_combat_towers() -> void:
 		var tower := TowerRuntime.new(); tower.setup(gem, definition, Vector2(gem.cell) * 100.0 + Vector2.ONE * 50.0); combat.add_tower(tower)
 
 func _on_navigation_changed() -> void:
-	if pathfinder == null or combat == null or map == null: return
+	if pathfinder == null or map == null: return
 	var refreshed := pathfinder.find_route(map)
-	if refreshed.is_empty(): return
-	combat.refresh_enemy_paths(refreshed)
+	if refreshed.is_empty():
+		navigation_ready = false
+		cached_ground_route.clear()
+		if combat != null: combat.set_navigation_cache([], map.ordered_waypoints())
+		return
+	_set_navigation_snapshot(refreshed)
+	# Placement happens only in Construction; do not repath active enemies from
+	# that preview. Combat gets one authoritative refresh at its boundary.
+	if combat != null and phases != null and phases.phase == GamePhaseMachine.Phase.COMBAT:
+		combat.refresh_enemy_paths(cached_ground_route, cached_waypoint_route)
+
+func _calculate_navigation_snapshot() -> Array[Vector2i]:
+	if pathfinder == null or map == null: return []
+	var route := pathfinder.find_route(map)
+	if route.is_empty():
+		navigation_ready = false
+		cached_ground_route.clear()
+		cached_waypoint_route.clear()
+		return []
+	_set_navigation_snapshot(route)
+	return cached_ground_route.duplicate()
+
+func _set_navigation_snapshot(route: Array[Vector2i]) -> void:
+	cached_ground_route = route.duplicate()
+	cached_waypoint_route = map.ordered_waypoints().duplicate() if map != null else []
+	navigation_ready = not cached_ground_route.is_empty() and not cached_waypoint_route.is_empty()
 
 func _on_phase_exited(previous_phase: GamePhaseMachine.Phase) -> void:
 	if previous_phase == GamePhaseMachine.Phase.COMBAT and combat != null:

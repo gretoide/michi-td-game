@@ -473,15 +473,10 @@ func _execute_command(index: int) -> void:
     var id: String = action.id
     match id:
         "place_gem":
-            # Q arms placement. The following click resolves the cell from
-            # the map event itself, so opening the game no longer requires a
-            # preliminary click just to initialize hover state.
+            # The placement hotkey is an immediate action: resolve the cell
+            # under the cursor and place the selected gem in Construction.
             if runtime != null and runtime.phases.phase == GamePhaseMachine.Phase.CONSTRUCTION and map_view != null:
-                place_gem_mode = not place_gem_mode
-                selection.clear()
-                _close_combination_popup()
-                map_view.hover_can_place = map_view._can_preview_placement(map_view.hover_cell)
-                _set_map_cursor(place_gem_mode and map_view.hover_can_place)
+                map_view.place_gem_at_pointer()
         "select_gem": _set_feedback("game.feedback.select_hint")
         "combine": _open_combination_popup_for(_selected_combination_gem())
         "degrade": _degrade_selected()
@@ -501,6 +496,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
             var picked: StringName = runtime.support_rewards.candidates[reward_index]
             runtime.support_rewards.choose(picked)
             _close_overlay(reward_overlay); reward_overlay = null; get_tree().paused = false
+        return
+    if event.keycode == KEY_Q:
+        if runtime != null and runtime.phases.phase == GamePhaseMachine.Phase.CONSTRUCTION and map_view != null:
+            map_view.place_gem_at_pointer()
         return
     if event.keycode == KEY_P: _toggle_recipes(); return
     if event.keycode == KEY_ESCAPE:
@@ -1882,7 +1881,7 @@ class MapDebugView extends Control:
     var damage_feedbacks: Array[Dictionary] = []
     const AUTHORED_MAP_SCENE := preload("res://src/gameplay/map/map.tscn")
     const AUTHORED_MAP_SIZE := Vector2(1024.0, 640.0)
-    const PROJECTILE_TEXTURE := preload("res://assets/art/gameplay/projectiles/fireball_5_colors.png")
+    const PROJECTILE_TEXTURE := preload("res://assets/art/gameplay/projectiles/bullet_trail_column_1.png")
     func _ready() -> void:
         mouse_filter = Control.MOUSE_FILTER_STOP
         clip_contents = true
@@ -2153,6 +2152,14 @@ class MapDebugView extends Control:
 
     func place_gem_at_hover() -> void:
         place_gem_at_cell(hover_cell)
+
+    func place_gem_at_pointer() -> void:
+        # Mouse motion is not guaranteed before the first key press. Resolve
+        # the current pointer directly so Q works immediately after opening
+        # the game, without requiring a preliminary click or hover event.
+        var pointer := get_local_mouse_position()
+        var cell := _cell_at(pointer)
+        place_gem_at_cell(cell)
 
     func place_gem_at_cell(cell: Vector2i) -> void:
         if runtime == null or runtime.phases.phase != GamePhaseMachine.Phase.CONSTRUCTION:
@@ -2441,18 +2448,33 @@ class MapDebugView extends Control:
     func _draw_projectile(projectile: HomingProjectile, cell_size: Vector2, canvas: CanvasItem) -> void:
         var projectile_point := _world_view_position(projectile.position, cell_size)
         var projectile_size := maxf(12.0, minf(cell_size.x, cell_size.y) * 1.05)
-        var frame := int(Time.get_ticks_msec() / 90.0) % 4
-        var row := _projectile_color_row(projectile.source_gem_id)
+        var frame := int(Time.get_ticks_msec() / 90.0) % 8
+        var color_row := _projectile_color_row(projectile.source_gem_id)
+        # The selected sheet has 8 frames and four animation rows per colour.
+        # Draw one sprite only: the second supplied column is a companion
+        # echo/trail and would make every shot look like a doubled effect.
+        var sheet_row := color_row * 4 + (frame % 4)
+        var source_rect := Rect2(frame * 64.0, sheet_row * 64.0, 64.0, 64.0)
         canvas.draw_set_transform(board_origin + map_pan + projectile_point * map_zoom, projectile.direction.angle(), Vector2.ONE * map_zoom)
-        canvas.draw_texture_rect_region(PROJECTILE_TEXTURE, Rect2(Vector2.ONE * projectile_size * -0.5, Vector2.ONE * projectile_size), Rect2(frame * 32.0, row * 32.0, 32.0, 32.0))
+        canvas.draw_texture_rect_region(PROJECTILE_TEXTURE, Rect2(Vector2.ONE * projectile_size * -0.5, Vector2.ONE * projectile_size), source_rect)
 
     func _projectile_color_row(gem_id: StringName) -> int:
-        match view._gem_color_key(gem_id):
-            "purple", "lilac": return 1
-            "light_green": return 2
-            "red": return 3
-            "blue", "turquoise", "dark_blue": return 4
-            _: return 0
+        # Rows in Part 8 Column 1 are: white, gold/red, cyan/blue,
+        # magenta/purple and green. Keep the mapping explicit so a diamond
+        # does not inherit the lilac UI key and every gem matches its shot.
+        match String(gem_id).to_lower():
+            "ruby", "blood", "coral", "topaz", "gold": return 1
+            "aquamarine", "tourmaline", "sapphire", "lazurite", "blue", "turquoise": return 2
+            "amethyst", "purple", "opal", "pearl", "lilac": return 3
+            "emerald", "jade", "green", "light_green": return 4
+            "diamond", "quartz", "white": return 0
+            _:
+                match view._gem_color_key(gem_id):
+                    "red", "gold": return 1
+                    "blue", "turquoise", "dark_blue": return 2
+                    "purple", "lilac": return 3
+                    "light_green": return 4
+                    _: return 0
     func _gem_color(gem: GemInstance) -> Color:
         var colors := {&"amethyst":Color("b78cff"),&"aquamarine":Color("68d8e8"),&"diamond":Color("e9f6ff"),&"emerald":Color("55d889"),&"opal":Color("f3a7d8"),&"ruby":Color("ef6262"),&"sapphire":Color("6598ff"),&"topaz":Color("f4c95d")}; return colors.get(gem.id, Color("d99b50"))
 

@@ -21,10 +21,20 @@ func run(suite: FoundationTestSuite) -> void:
 	suite.expect(not runtime.grid.is_restricted(Vector2i(11, 8)), "cells outside the restricted blocks remain buildable")
 	suite.expect(runtime.grid.is_walkable(Vector2i(1, 1)), "inner map remains available for construction")
 	suite.expect(not runtime.pathfinder.find_route(runtime.map).is_empty(), "path exists before gameplay input")
+	# Simulate a blocking gem that already exists before the wave starts. The
+	# combat snapshot must contain the detour before the first spawn signal.
+	var blocked_cell := Vector2i(5, 10)
+	suite.expect(runtime.grid.occupy(blocked_cell), "pre-existing blocker can be simulated")
 	var spawn_state := {"profile": StringName()}
 	runtime.wave.enemy_spawned.connect(func(_enemy_id: int, profile: EnemyProfileDefinition): spawn_state.profile = profile.id)
 	suite.expect(runtime.start_first_wave(), "first wave can start after resolving Construction")
+	suite.expect(runtime.navigation_ready, "combat navigation is ready before wave spawning")
+	suite.expect(not runtime.combat.path_cells.has(blocked_cell), "cached Ground route avoids the pre-existing blocker")
+	suite.expect_equal(runtime.combat.path_cells, runtime.cached_ground_route, "combat receives the authoritative route snapshot")
 	runtime.wave.tick(9.0)
+	suite.expect(runtime.combat.enemies.size() > 0, "first enemy is spawned from the prepared cache")
+	if not runtime.combat.enemies.is_empty():
+		suite.expect(not runtime.combat.enemies[0].path.is_empty() and not runtime.combat.enemies[0].path.has(Vector2(blocked_cell) * 100.0 + Vector2.ONE * 50.0), "spawned Ground enemy starts with the detour, before moving")
 	for enemy_id in range(1, 11):
 		runtime.wave.resolve_enemy(enemy_id, &"death")
 	suite.expect_equal(spawn_state.profile, &"frenzied_pig", "wave instantiates the configured enemy profile")

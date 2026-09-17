@@ -11,16 +11,32 @@ var projectiles: Array[HomingProjectile] = []
 var projectile_speed := 1000.0
 var effect_system: EffectSystem
 var path_cells: Array[Vector2i] = []
+var waypoint_cells: Array[Vector2i] = []
 var spawn_counter := 0
 
-func setup(value_projectile_speed := 1000.0, value_path: Array[Vector2i] = []) -> void:
-	projectile_speed = value_projectile_speed; path_cells = value_path
+func setup(value_projectile_speed := 1000.0, value_path: Array[Vector2i] = [], value_waypoints: Array[Vector2i] = []) -> void:
+	projectile_speed = value_projectile_speed
+	set_navigation_cache(value_path, value_waypoints)
 
-func refresh_enemy_paths(value_path: Array[Vector2i]) -> void:
-	if value_path.is_empty(): return
+func set_navigation_cache(value_path: Array[Vector2i], value_waypoints: Array[Vector2i] = []) -> void:
+	# The cache is replaced atomically at a phase boundary. Enemies spawned
+	# afterwards receive this exact snapshot instead of solving a partial path
+	# while the wave is already running.
 	path_cells = value_path.duplicate()
+	waypoint_cells = value_waypoints.duplicate()
+
+func refresh_enemy_paths(value_path: Array[Vector2i], value_waypoints: Array[Vector2i] = []) -> void:
+	path_cells = value_path.duplicate()
+	# Keep the existing direct waypoint snapshot when callers are only
+	# refreshing Ground (the optional argument preserves the old API).
+	if not value_waypoints.is_empty(): waypoint_cells = value_waypoints.duplicate()
+	if path_cells.is_empty(): return
 	for enemy: EnemyRuntime in enemies:
-		if enemy != null and enemy.is_alive(): enemy.refresh_path(path_cells)
+		if enemy == null or not enemy.is_alive(): continue
+		if enemy.movement_type.to_lower() == "flying":
+			if not waypoint_cells.is_empty(): enemy.refresh_waypoint_path(waypoint_cells)
+		else:
+			enemy.refresh_path(path_cells)
 
 func clear_projectiles() -> void:
 	if projectiles.is_empty(): return
@@ -35,9 +51,18 @@ func add_tower(tower: TowerRuntime) -> void:
 
 func spawn_enemy(profile: EnemyProfileDefinition, cell := Vector2i.ZERO) -> EnemyRuntime:
 	if profile == null: return null
+	var is_flying := profile.movement_type.to_lower() == "flying"
+	# A missing cache is a navigation error, not a reason to send an enemy in a
+	# straight line. GameRuntime validates this before wave.start(); this guard
+	# keeps debug/manual spawns from bypassing that invariant.
+	if (is_flying and waypoint_cells.is_empty()) or (not is_flying and path_cells.is_empty()):
+		return null
 	spawn_counter += 1
 	var enemy := EnemyRuntime.new(); enemy.setup(spawn_counter, profile, Vector2(cell) * 100.0 + Vector2.ONE * 50.0)
-	enemy.set_path(path_cells)
+	if is_flying:
+		enemy.set_waypoint_path(waypoint_cells)
+	else:
+		enemy.set_path(path_cells)
 	enemy.damaged.connect(func(amount: float, _result): damage_applied.emit(enemy, amount))
 	if effect_system != null: enemy.damaged.connect(func(amount: float, _result): effect_system.on_damage(enemy, amount))
 	enemy.reached_path_end.connect(func(): enemy.mark_escaped())

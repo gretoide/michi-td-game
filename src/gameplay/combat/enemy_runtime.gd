@@ -8,6 +8,7 @@ signal reached_path_end
 signal checkpoint_reached(index: int)
 var id: int
 var profile_id: StringName
+var movement_type := "Ground"
 var position := Vector2.ZERO
 var max_hp := 1.0
 var hp := 1.0
@@ -25,6 +26,7 @@ var path: Array[Vector2] = []
 var path_index := 0
 var checkpoint_cells: Array[Vector2i] = []
 var reached_checkpoint_indices := {}
+var next_checkpoint_index := 0
 var rush_remaining := 0.0
 var recharge_accumulator := 0.0
 var evasion_chance := 0.0
@@ -32,7 +34,7 @@ var invisible := false
 var disarm_aura_radius := 0.0
 
 func setup(value_id: int, profile: EnemyProfileDefinition, start_position := Vector2.ZERO) -> void:
-	id = value_id; profile_id = profile.id; position = start_position
+	id = value_id; profile_id = profile.id; movement_type = profile.movement_type; position = start_position
 	max_hp = maxf(profile.hp, 1.0); hp = max_hp; armor = profile.armor; magic_resistance = profile.magic_resistance; attack = profile.attack; xp_reward = profile.xp_reward
 	movement_speed = maxf(profile.base_speed, 20.0)
 	for ability in profile.ability_ids: abilities[StringName(ability)] = true
@@ -77,9 +79,36 @@ func set_path(cells: Array[Vector2i]) -> void:
 	path.clear()
 	for cell in cells: path.append(Vector2(cell) * 100.0 + Vector2.ONE * 50.0)
 	path_index = 0
+	next_checkpoint_index = 0
 	if not path.is_empty(): position = path[0]
 
+func set_waypoint_path(cells: Array[Vector2i]) -> void:
+	# Flying enemies use the ordered spawn/checkpoint/endpoint points and do
+	# not need every ground route cell. Their movement remains continuous, but
+	# ignores construction occupancy and follows the waypoint sequence.
+	if movement_type.to_lower() != "flying" or cells.is_empty(): return
+	path.clear()
+	for cell in cells: path.append(Vector2(cell) * 100.0 + Vector2.ONE * 50.0)
+	path_index = 0
+	next_checkpoint_index = 0
+	if not path.is_empty(): position = path[0]
+
+func refresh_waypoint_path(cells: Array[Vector2i]) -> void:
+	if movement_type.to_lower() != "flying" or cells.is_empty(): return
+	var rebuilt: Array[Vector2] = []
+	for cell in cells: rebuilt.append(Vector2(cell) * 100.0 + Vector2.ONE * 50.0)
+	var closest := 0
+	var closest_distance := INF
+	for index in range(rebuilt.size()):
+		var distance := position.distance_squared_to(rebuilt[index])
+		if distance < closest_distance:
+			closest_distance = distance
+			closest = index
+	path = rebuilt
+	path_index = closest
+
 func refresh_path(cells: Array[Vector2i]) -> void:
+	if movement_type.to_lower() == "flying": return
 	var rebuilt: Array[Vector2] = []
 	for cell in cells: rebuilt.append(Vector2(cell) * 100.0 + Vector2.ONE * 50.0)
 	if rebuilt.is_empty(): return
@@ -101,9 +130,13 @@ func move_along_path(delta: float) -> void:
 		if path_index < path.size() - 1:
 			var reached_cell := Vector2i(floori(path[path_index].x / 100.0), floori(path[path_index].y / 100.0))
 			var checkpoint_index := checkpoint_cells.find(reached_cell)
-			if checkpoint_index >= 0 and not reached_checkpoint_indices.has(checkpoint_index):
-				reached_checkpoint_indices[checkpoint_index] = true; checkpoint_reached.emit(checkpoint_index)
+			# Checkpoint events are ordered by the route, never by whichever
+			# checkpoint happens to be crossed first during a detour.
+			if checkpoint_index == next_checkpoint_index and not reached_checkpoint_indices.has(checkpoint_index):
+				reached_checkpoint_indices[checkpoint_index] = true
+				next_checkpoint_index += 1
+				checkpoint_reached.emit(checkpoint_index)
 		else: reached_path_end.emit()
 
 func set_checkpoint_cells(value: Array[Vector2i]) -> void:
-	checkpoint_cells = value.duplicate(); reached_checkpoint_indices.clear()
+	checkpoint_cells = value.duplicate(); reached_checkpoint_indices.clear(); next_checkpoint_index = 0
