@@ -21,6 +21,7 @@ var _atlas_cache: Dictionary = {}
 var _texture_cache: Dictionary = {}
 var _atlas_image_cache: Dictionary = {}
 var _tower_metrics_cache: Dictionary = {}
+var _gem_anchor_cache: Dictionary = {}
 
 func get_gem_texture(gem_id: StringName, level: int) -> Texture2D:
     return get_texture(gem_id, level, AssetKind.GEM)
@@ -33,6 +34,41 @@ func get_tower_visual_anchor(gem_id: StringName, level: int) -> Vector2:
 
 func get_tower_visible_fraction(gem_id: StringName, level: int) -> Vector2:
     return _tower_visual_metrics(gem_id, level).get("visible_fraction", Vector2.ONE) as Vector2
+
+func get_gem_visual_anchor(gem_id: StringName, level: int) -> Vector2:
+    """Return the normalized center of the visible gem pixels in its atlas cell."""
+    if not has_base_asset(gem_id, level):
+        return Vector2(0.5, 0.5)
+    var key := "%s:%d" % [String(gem_id), level]
+    if _gem_anchor_cache.has(key):
+        return _gem_anchor_cache[key] as Vector2
+    var image := _load_atlas_image(AssetKind.GEM)
+    if image == null or image.is_empty():
+        return Vector2(0.5, 0.5)
+    var column := BASE_GEM_IDS.find(gem_id)
+    var row := level - 1
+    var cell_width := image.get_width() / GRID_COLUMNS
+    var cell_height := image.get_height() / GRID_ROWS
+    var min_x := cell_width
+    var max_x := -1
+    var min_y := cell_height
+    var max_y := -1
+    for y in range(cell_height):
+        for x in range(cell_width):
+            if image.get_pixel(column * cell_width + x, row * cell_height + y).a <= 0.05:
+                continue
+            min_x = mini(min_x, x)
+            max_x = maxi(max_x, x)
+            min_y = mini(min_y, y)
+            max_y = maxi(max_y, y)
+    var anchor := Vector2(0.5, 0.5)
+    if max_x >= min_x and max_y >= min_y:
+        anchor = Vector2(
+            (float(min_x) + float(max_x + 1)) * 0.5 / float(cell_width),
+            (float(min_y) + float(max_y + 1)) * 0.5 / float(cell_height)
+        )
+    _gem_anchor_cache[key] = anchor
+    return anchor
 
 func _tower_visual_metrics(gem_id: StringName, level: int) -> Dictionary:
     if not has_base_asset(gem_id, level): return {"anchor": Vector2(0.5, 0.5), "visible_fraction": Vector2.ONE}

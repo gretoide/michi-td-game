@@ -107,3 +107,22 @@ func logical_cell_to_authored_rect(cell: Vector2i) -> Rect2:
 	var authored_size := Vector2(x_scale, y_scale)
 	var rect := Rect2((center - authored_size * 0.5) * CELL_SIZE, authored_size * CELL_SIZE)
 	return rect.intersection(Rect2(Vector2.ZERO, Vector2(GRID_WIDTH, GRID_HEIGHT) * CELL_SIZE))
+
+func logical_cell_to_runtime_authored_rect(cell: Vector2i) -> Rect2:
+	# Runtime actors use the continuous logical-cell center. This rectangle is
+	# for hover/selection only; authored decoration footprint conversion keeps
+	# using logical_cell_to_authored_rect above.
+	var authored_size := Vector2(float(GRID_WIDTH) / 36.0, 32.0 / 29.0)
+	var center := logical_world_to_authored((Vector2(cell) + Vector2.ONE * 0.5) * 100.0) / CELL_SIZE
+	var rect := Rect2((center - authored_size * 0.5) * CELL_SIZE, authored_size * CELL_SIZE)
+	return rect.intersection(Rect2(Vector2.ZERO, Vector2(GRID_WIDTH, GRID_HEIGHT) * CELL_SIZE))
+
+func logical_world_to_authored(world_position: Vector2) -> Vector2:
+	var logical := world_position / 100.0
+	return Vector2(
+		logical.x * float(GRID_WIDTH) / 36.0,
+		3.5 + (logical.y - 3.5) * 32.0 / 29.0
+	) * CELL_SIZE
+
+func logical_cell_base_to_authored(cell: Vector2i, base_y: float = 0.75) -> Vector2:
+	return logical_world_to_authored((Vector2(cell) + Vector2(0.5, base_y)) * 100.0)

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://6pdvsk2ibo12"
-path="res://.godot/imported/spawner_04.png-87b128077a2351a41944f1d7093c27f7.ctex"
+uid="uid://b4s0p3n0fpqus"
+path="res://.godot/imported/maple_65103969195c.png-763ac437d89cfd8be8fb4161d92430fc.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/gameplay/environment/spawner/spawner_04.png"
-dest_files=["res://.godot/imported/spawner_04.png-87b128077a2351a41944f1d7093c27f7.ctex"]
+source_file="res://assets/art/gameplay/environment/generated/map_objects/trees/maple_65103969195c.png"
+dest_files=["res://.godot/imported/maple_65103969195c.png-763ac437d89cfd8be8fb4161d92430fc.ctex"]
 
 [params]
 

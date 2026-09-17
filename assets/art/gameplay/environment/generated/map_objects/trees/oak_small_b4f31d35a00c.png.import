@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://btu7u0kugwe8y"
-path="res://.godot/imported/spawner_03.png-0249506d8535ef5211696cd6361bb573.ctex"
+uid="uid://ce08v434fvul0"
+path="res://.godot/imported/oak_small_b4f31d35a00c.png-b76936eeecfbda31ef4920e131d9b104.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/gameplay/environment/spawner/spawner_03.png"
-dest_files=["res://.godot/imported/spawner_03.png-0249506d8535ef5211696cd6361bb573.ctex"]
+source_file="res://assets/art/gameplay/environment/generated/map_objects/trees/oak_small_b4f31d35a00c.png"
+dest_files=["res://.godot/imported/oak_small_b4f31d35a00c.png-b76936eeecfbda31ef4920e131d9b104.ctex"]
 
 [params]
 

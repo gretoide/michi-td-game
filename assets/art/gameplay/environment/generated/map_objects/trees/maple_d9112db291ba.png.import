@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://coh5tehv0w8fd"
-path="res://.godot/imported/road.png-a49b74cabdf35387953c07fa60ebfdfa.ctex"
+uid="uid://ehm8y5303dy5"
+path="res://.godot/imported/maple_d9112db291ba.png-6c1d01f4c06957b5b24ae08edef42155.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/gameplay/environment/farm_rpg/road.png"
-dest_files=["res://.godot/imported/road.png-a49b74cabdf35387953c07fa60ebfdfa.ctex"]
+source_file="res://assets/art/gameplay/environment/generated/map_objects/trees/maple_d9112db291ba.png"
+dest_files=["res://.godot/imported/maple_d9112db291ba.png-6c1d01f4c06957b5b24ae08edef42155.ctex"]
 
 [params]
 

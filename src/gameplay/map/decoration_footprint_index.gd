@@ -9,12 +9,15 @@ const DEFAULT_TILE_SIZE := Vector2i(16, 16)
 
 var groups: Array[Dictionary] = []
 
-func rebuild(decorations: Node) -> void:
+func rebuild(map_root: Node) -> void:
 	groups.clear()
-	if decorations == null:
+	if map_root == null:
 		return
+	var decorations := map_root.get_node_or_null("Decorations")
+	if decorations == null:
+		decorations = map_root
 	var layers: Array[TileMapLayer] = []
-	for layer_name in ["DecorationTiles", "DecorationForeground"]:
+	for layer_name in ["FlatDetails", "FlatDetailsForeground"]:
 		var layer := decorations.get_node_or_null(layer_name) as TileMapLayer
 		if layer != null:
 			layers.append(layer)
@@ -70,12 +73,14 @@ func rebuild(decorations: Node) -> void:
 	# Explicit object scenes are authoritative over their complete footprint.
 	# Accept direct children as well for older authored maps that placed
 	# MapDecorationMarker nodes directly under Decorations.
-	_collect_object_groups(decorations)
+	_collect_object_groups(map_root)
 
 func _collect_object_groups(node: Node) -> void:
 	for child in node.get_children():
 		if child is MapDecorationObject:
 			var object := child as MapDecorationObject
+			if not object.remove_on_build:
+				continue
 			var footprint := object.authored_footprint()
 			groups.append({
 				"source_id": -1,

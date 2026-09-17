@@ -12,22 +12,30 @@ func run(suite: FoundationTestSuite) -> void:
 
 	var map_scene := load("res://src/gameplay/map/map.tscn") as PackedScene
 	var authored := map_scene.instantiate()
-	var decorations := authored.get_node("Decorations") as Node2D
 	var index := DecorationFootprintIndex.new()
-	index.rebuild(decorations)
-	var authored_root := authored as MapEditorRoot
-	var target := authored_root.logical_cell_to_authored_rect(Vector2i(7, 12))
-	var hits := index.groups_for_placement(target)
+	index.rebuild(authored)
 	var complete_tree: Dictionary = {}
-	for group: Dictionary in hits:
-		if group["entries"].size() == 20:
-			complete_tree = group
-			break
-	suite.expect(not complete_tree.is_empty(), "decoration index finds a complete multi-cell tree")
-	var foreground := decorations.get_node("DecorationForeground") as TileMapLayer
-	var before := foreground.get_used_cells().size()
-	if not complete_tree.is_empty():
+	var tree: MapDecorationObject
+	var largest_area := 0.0
+	for group: Dictionary in index.groups:
+		var entries: Array = group.get("entries", [])
+		if entries.size() == 1 and entries[0].has("object"):
+			var candidate := entries[0]["object"] as MapDecorationObject
+			var area := (group.get("bounds", Rect2()) as Rect2).get_area()
+			if candidate != null and candidate.category == "tree" and candidate.remove_on_build and area > largest_area:
+				complete_tree = group
+				tree = candidate
+				largest_area = area
+			if candidate != null:
+				suite.expect(candidate.remove_on_build, "protected landmarks stay outside the decoration removal index")
+	suite.expect(not complete_tree.is_empty(), "decoration index finds a complete multi-cell tree object")
+	var fences := authored.get_node("Decorations/Fences") as TileMapLayer
+	var fence_count := fences.get_used_cells().size()
+	if tree != null:
+		var target := complete_tree["bounds"] as Rect2
+		var hits := index.groups_for_placement(Rect2(target.get_center() - Vector2.ONE, Vector2.ONE * 2.0))
+		suite.expect(hits.has(complete_tree), "a cell inside the tree resolves to the complete object footprint")
 		index.erase_group(complete_tree)
-		suite.expect_equal(foreground.get_used_cells().size(), before - 20, "placing a gem removes every tile of the tree asset")
-	suite.expect_equal(foreground.get_used_cells().size(), 172, "unrelated foreground decoration tiles remain")
+		suite.expect(tree.is_queued_for_deletion(), "placing a gem queues the complete tree object for removal")
+	suite.expect_equal(fences.get_used_cells().size(), fence_count, "removing a decoration never touches fences")
 	authored.free()

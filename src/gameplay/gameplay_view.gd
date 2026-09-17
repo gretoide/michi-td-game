@@ -473,12 +473,15 @@ func _execute_command(index: int) -> void:
     var id: String = action.id
     match id:
         "place_gem":
-            # Place Gem is an instantaneous contextual action: resolve the
-            # cell currently under the cursor and never leave a pending mode
-            # that requires a second click.
-            place_gem_mode = false
+            # Q arms placement. The following click resolves the cell from
+            # the map event itself, so opening the game no longer requires a
+            # preliminary click just to initialize hover state.
             if runtime != null and runtime.phases.phase == GamePhaseMachine.Phase.CONSTRUCTION and map_view != null:
-                map_view.place_gem_at_hover()
+                place_gem_mode = not place_gem_mode
+                selection.clear()
+                _close_combination_popup()
+                map_view.hover_can_place = map_view._can_preview_placement(map_view.hover_cell)
+                _set_map_cursor(place_gem_mode and map_view.hover_can_place)
         "select_gem": _set_feedback("game.feedback.select_hint")
         "combine": _open_combination_popup_for(_selected_combination_gem())
         "degrade": _degrade_selected()
@@ -546,7 +549,9 @@ func _open_combination_popup_for(gem: GemInstance) -> void:
     combination_options = [] if selected_tower != null else runtime.construction.contextual_combinations(gem)
     combination_popup = PanelContainer.new()
     combination_popup.name = "CombinationPopup"
-    combination_popup.z_index = 30
+    # Context panels must stay above every map layer, including authored
+    # foreground objects and the runtime overlay.
+    combination_popup.z_index = 300
     combination_popup.mouse_filter = Control.MOUSE_FILTER_STOP
     combination_popup.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     combination_popup.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
@@ -611,7 +616,7 @@ func _open_combination_popup_for(gem: GemInstance) -> void:
     combination_popup_arrow = Label.new()
     combination_popup_arrow.text = "◀"
     combination_popup_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    combination_popup_arrow.z_index = 31
+    combination_popup_arrow.z_index = 301
     combination_popup_arrow.add_theme_font_size_override("font_size", 24)
     add_child(combination_popup_arrow)
     _position_context_popup(gem.cell)
@@ -621,7 +626,7 @@ func _open_stone_popup_for(cell: Vector2i) -> void:
     if runtime == null or runtime.phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or not runtime.construction.stones.has(cell): return
     combination_popup = PanelContainer.new()
     combination_popup.name = "StoneActionPopup"
-    combination_popup.z_index = 30
+    combination_popup.z_index = 300
     combination_popup.mouse_filter = Control.MOUSE_FILTER_STOP
     combination_popup.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     combination_popup.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
@@ -651,7 +656,7 @@ func _open_stone_popup_for(cell: Vector2i) -> void:
     combination_popup_arrow = Label.new()
     combination_popup_arrow.text = "◀"
     combination_popup_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    combination_popup_arrow.z_index = 31
+    combination_popup_arrow.z_index = 301
     combination_popup_arrow.add_theme_font_size_override("font_size", 24)
     add_child(combination_popup_arrow)
     _position_context_popup(cell)
@@ -1496,7 +1501,7 @@ func _make_parchment_overlay(title_text: String, minimum_size: Vector2, close_ca
     var overlay := PanelContainer.new()
     overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     overlay.add_theme_stylebox_override("panel", _modal_backdrop())
-    overlay.z_index = 100
+    overlay.z_index = 300
     overlay.process_mode = Node.PROCESS_MODE_ALWAYS
     overlay.mouse_filter = Control.MOUSE_FILTER_STOP
     var center := CenterContainer.new()
@@ -1576,7 +1581,7 @@ func _make_overlay(title_text: String) -> PanelContainer:
     var overlay := PanelContainer.new()
     overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     overlay.add_theme_stylebox_override("panel", _modal_backdrop())
-    overlay.z_index = 100
+    overlay.z_index = 300
     overlay.process_mode = Node.PROCESS_MODE_ALWAYS
     overlay.mouse_filter = Control.MOUSE_FILTER_STOP
     var center := CenterContainer.new()
@@ -1854,18 +1859,18 @@ class MapDebugView extends Control:
     var runtime: GameRuntime
     var view: GameplayView
     var authored_map: Node2D
+    var world_group: CanvasGroup
     var decoration_index: DecorationFootprintIndex
-    var gem_layer: Control
+    var world_y_sort: Node2D
+    var gem_layer: Node2D
     var terrain_layer: MapTerrainLayer
     var decoration_layer: MapDecorationLayer
     var grid_layer: MapGridLayer
     var restricted_layer: RestrictedZoneLayer
-    var stone_layer: Control
+    var runtime_overlay: RuntimeOverlay
+    var stone_layer: Node2D
     var stone_nodes: Dictionary = {}
-    var enemy_layer: EnemyVisualLayer
-    var spawner_layer: Control
-    var spawner_decoration: SpawnerDecoration
-    var castle_decoration: CastleCheckpointDecoration
+    var enemy_nodes: Dictionary = {}
     var hover_cell := Vector2i(-1, -1)
     var hover_can_place := false
     var map_zoom := 1.0
@@ -1887,16 +1892,17 @@ class MapDebugView extends Control:
         z_index = 3
         authored_map = AUTHORED_MAP_SCENE.instantiate() as Node2D
         if authored_map != null:
-            add_child(authored_map)
-            authored_map.z_index = -2
+            # Keep the authored map in an isolated canvas group so its
+            # negative-Z ground/path layers render above the map panel's
+            # background without changing their authored ordering. This group
+            # is only a render container; no lighting or shader is applied.
+            world_group = CanvasGroup.new()
+            world_group.name = "WorldRenderGroup"
+            world_group.z_index = 100
+            add_child(world_group)
+            world_group.add_child(authored_map)
+            authored_map.z_index = 0
             decoration_index = DecorationFootprintIndex.new()
-            # Ground is intentionally negative in the editor so it stays
-            # below Path/Obstacles/Decorations. In the Control-based runtime
-            # that would put it behind the map panel's background, so lift
-            # only its runtime draw order without changing map.tscn.
-            var authored_ground := authored_map.get_node_or_null("Ground") as TileMapLayer
-            if authored_ground != null:
-                authored_ground.z_index = 0
             var authored_root := authored_map as MapEditorRoot
             if authored_root != null:
                 authored_root.prepare_for_runtime()
@@ -1906,24 +1912,15 @@ class MapDebugView extends Control:
             var authored_gems := authored_map.get_node_or_null("Gems") as Node2D
             if authored_gems != null:
                 authored_gems.visible = false
-            # Keep authored checkpoint visuals in runtime: their child flag is
-            # deliberately independent from the logical CP cell.
-            var authored_checkpoints := authored_map.get_node_or_null("Path/Checkpoints") as Node2D
-            if authored_checkpoints != null:
-                authored_checkpoints.visible = true
-            # Restricted cells are tinted above authored terrain/decorations,
-            # but the actual landmarks remain readable above that tint.
-            for landmark_path in ["Path/Spawn/SpawnerVisual", "Path/Endpoint/CastleVisual"]:
-                var landmark := authored_map.get_node_or_null(landmark_path) as CanvasItem
-                if landmark != null:
-                    landmark.z_as_relative = false
-                    landmark.z_index = 31 if landmark_path.contains("Spawn") else 32
-            if authored_checkpoints != null:
-                for checkpoint in authored_checkpoints.get_children():
-                    var flag := checkpoint.get_node_or_null("FlagVisual") as CanvasItem
-                    if flag != null:
-                        flag.z_as_relative = false
-                        flag.z_index = 20
+            world_y_sort = authored_map.get_node_or_null("WorldYSort") as Node2D
+            if world_y_sort != null:
+                world_y_sort.y_sort_enabled = true
+                world_y_sort.z_index = 0
+            else:
+                world_y_sort = Node2D.new()
+                world_y_sort.name = "WorldYSort"
+                world_y_sort.y_sort_enabled = true
+                authored_map.add_child(world_y_sort)
         terrain_layer = MapTerrainLayer.new()
         terrain_layer.runtime = runtime
         terrain_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1952,53 +1949,23 @@ class MapDebugView extends Control:
         restricted_layer.runtime = runtime
         restricted_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         restricted_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        # Sit above authored terrain/decorations (root z=-2) but below towers,
-        # stones and the dedicated spawn/castle visuals.
-        restricted_layer.z_index = 2
-        restricted_layer.show_behind_parent = true
+        # Sit above flat authored layers but below every y-sorted world object.
+        restricted_layer.z_index = 90
         add_child(restricted_layer)
-        gem_layer = Control.new()
-        gem_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-        gem_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        gem_layer.z_index = 3
-        add_child(gem_layer)
-        stone_layer = Control.new()
-        stone_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-        stone_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        # Stones remain readable when large tower sprites overlap nearby cells.
-        stone_layer.z_index = 5
-        add_child(stone_layer)
-        enemy_layer = EnemyVisualLayer.new()
-        enemy_layer.runtime = runtime
-        enemy_layer.view = view
-        enemy_layer.map_view = self
-        enemy_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-        enemy_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        # Enemies are above every gameplay asset, while the spawn and endpoint
-        # landmarks use the higher absolute layers configured below.
-        enemy_layer.z_as_relative = false
-        enemy_layer.z_index = 20
-        add_child(enemy_layer)
-        spawner_layer = Control.new()
-        spawner_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-        spawner_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        # The portal must remain readable when a generated border tree shares
-        # its cells: trees stay above fences, while the spawn stays above trees.
-        spawner_layer.z_as_relative = false
-        spawner_layer.z_index = 31
-        add_child(spawner_layer)
-        spawner_decoration = SpawnerDecoration.new()
-        spawner_layer.add_child(spawner_decoration)
-        spawner_decoration.visible = false
-        castle_decoration = CastleCheckpointDecoration.new()
-        # Keep the endpoint landmark above the restricted-zone tint.
-        castle_decoration.z_as_relative = false
-        castle_decoration.z_index = 32
-        castle_decoration.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        castle_decoration.visible = false
-        add_child(castle_decoration)
+        # Runtime actors are direct children of the same y-sorted canvas as
+        # authored trees, props and landmarks. Their roots represent the
+        # ground contact point; their visuals extend upward from that origin.
+        gem_layer = world_y_sort
+        stone_layer = world_y_sort
+        runtime_overlay = RuntimeOverlay.new()
+        runtime_overlay.map_view = self
+        runtime_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        runtime_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        runtime_overlay.z_index = 190
+        add_child(runtime_overlay)
         var zoom_bar := HBoxContainer.new()
         zoom_bar.position = Vector2(2, 2)
+        zoom_bar.z_index = 250
         zoom_bar.add_theme_constant_override("separation", 4)
         for item in [["−", -0.1], ["＋", 0.1], ["⌂", 0.0]]:
             var button := Button.new(); button.text = item[0]; button.custom_minimum_size = Vector2(30, 30); button.tooltip_text = LocalizationService.tr_key("game.zoom"); view._style_game_button(button)
@@ -2018,41 +1985,38 @@ class MapDebugView extends Control:
         if runtime == null or view == null or gem_layer == null: return
         var live := {}
         var board_rect := _board_rect()
-        var cell_size := board_rect.size / 36.0
-        var visual_cell_size := minf(cell_size.x, cell_size.y)
-        if visual_cell_size <= 0.0: return
+        var authored_visual_cell_size := AUTHORED_MAP_SIZE.y / 36.0
+        if authored_visual_cell_size <= 0.0: return
         board_origin = board_rect.position
         if authored_map != null:
             _sync_authored_map_transform(board_rect)
-        terrain_layer.size = size
-        decoration_layer.size = size
-        grid_layer.size = size
-        restricted_layer.size = size
         decoration_layer.sync(board_rect.size.x, map_zoom, map_pan, board_origin)
         restricted_layer.sync(board_rect.size.x, map_zoom, map_pan, board_origin)
-        _sync_stone_sprites(cell_size)
+        _sync_stone_sprites()
         for gem: GemInstance in runtime.construction.board_gems:
             var key := str(gem.get_instance_id())
             live[key] = true
             var is_tower_visual := runtime.phases.phase == GamePhaseMachine.Phase.COMBAT or gem.round_id < runtime.construction.round_id
             # Visual scale and anchoring never change the one-cell logical footprint.
-            var sprite_size := maxf(36.0, visual_cell_size * GemAssetLibrary.GEM_SPRITE_CELLS)
+            var sprite_size := authored_visual_cell_size * GemAssetLibrary.GEM_SPRITE_CELLS
             if is_tower_visual:
-                sprite_size = visual_cell_size * GemAssetLibrary.TOWER_VISIBLE_CELLS
+                sprite_size = authored_visual_cell_size * GemAssetLibrary.TOWER_VISIBLE_CELLS
                 if view.gem_assets != null and view.gem_assets.has_base_asset(gem.id, gem.level):
                     var visible_fraction := view.gem_assets.get_tower_visible_fraction(gem.id, gem.level)
                     sprite_size /= maxf(0.01, maxf(visible_fraction.x, visible_fraction.y))
-            var sprite: TextureRect
+            var visual: WorldTextureVisual
             if _gem_nodes_has(key):
-                sprite = _gem_nodes_get(key)
+                visual = _gem_nodes_get(key)
             else:
-                sprite = view._make_gem_sprite(gem.id, gem.level, sprite_size)
+                visual = WorldTextureVisual.new()
+                visual.name = "Gem_%s" % key
+                var sprite := view._make_gem_sprite(gem.id, gem.level, sprite_size)
                 # Map entities must be free to shrink below their creation size.
-                # Keeping the UI-oriented minimum makes Godot clamp the rect on
-                # zoom-out while its anchor is calculated with the smaller size.
                 sprite.custom_minimum_size = Vector2.ZERO
-                gem_layer.add_child(sprite)
-                _gem_nodes_set(key, sprite)
+                visual.attach_visual(sprite)
+                gem_layer.add_child(visual)
+                _gem_nodes_set(key, visual)
+            var sprite := visual.visual
             if is_tower_visual:
                 sprite.texture = view._tower_texture(gem.id, gem.level)
             elif gem == runtime.construction.selected_board_gem and view.gem_assets != null and not view.gem_assets.has_base_asset(gem.id, gem.level):
@@ -2060,32 +2024,48 @@ class MapDebugView extends Control:
             else:
                 sprite.texture = view._gem_texture(gem.id, gem.level)
             if sprite.texture == null: sprite.texture = view._fallback_gem_texture(gem.id)
-            var display_size := Vector2.ONE * sprite_size * map_zoom
+            var display_size := Vector2.ONE * sprite_size
+            var authored_root := authored_map as MapEditorRoot
             if is_tower_visual and view.gem_assets != null and view.gem_assets.has_base_asset(gem.id, gem.level):
                 var visual_anchor := view.gem_assets.get_tower_visual_anchor(gem.id, gem.level)
-                var cell_base := _cell_view_position(gem.cell, Vector2(0.5, GemAssetLibrary.TOWER_BASE_CELL_Y), cell_size)
-                sprite.position = cell_base - visual_anchor * display_size
+                visual.position = authored_root.logical_cell_base_to_authored(gem.cell, GemAssetLibrary.TOWER_BASE_CELL_Y)
+                visual.set_visual_rect(display_size, visual_anchor)
             else:
-                sprite.position = _cell_view_position(gem.cell, Vector2.ONE * 0.5, cell_size) - Vector2.ONE * sprite_size * 0.5 * map_zoom
-            sprite.custom_minimum_size = Vector2.ZERO
-            sprite.size = display_size
-            sprite.visible = true
+                # A construction gem is a marker for the cell itself.  Keep
+                # its visual centered on the hovered/placed cell; using the
+                # tower pedestal anchor here made the sprite look one row
+                # above the highlighted cell even though the logic was right.
+                visual.position = authored_root.logical_cell_base_to_authored(gem.cell, 0.5)
+                var gem_anchor := view.gem_assets.get_gem_visual_anchor(gem.id, gem.level) if view.gem_assets != null else Vector2(0.5, 0.5)
+                visual.set_visual_rect(display_size, gem_anchor)
+            # Keep the logical anchor fixed for navigation/selection, while
+            # nudging only the artwork down on horizontal road cells so it
+            # sits naturally on the path surface.
+            if _is_horizontal_route_cell(gem.cell):
+                visual.visual.position.y += authored_visual_cell_size * 0.18
+            if is_tower_visual:
+                # Tower artwork was anchored a little high relative to the
+                # one-cell props (stones).  Keep the logical tower cell and
+                # hit area unchanged; lower only its rendered sprite.
+                visual.visual.position.y += authored_visual_cell_size * 0.16
+            visual.visible = true
         for key in _gem_nodes_keys():
             if not live.has(key):
                 var stale := _gem_nodes_get(key)
                 if is_instance_valid(stale): stale.queue_free()
                 _gem_nodes_erase(key)
+        _sync_enemy_nodes()
 
     func queue_enemy_redraw() -> void:
-        if is_instance_valid(enemy_layer): enemy_layer.queue_redraw()
+        _sync_enemy_nodes()
 
     func _gem_nodes_has(key: String) -> bool:
         return _gem_nodes().has(key)
 
-    func _gem_nodes_get(key: String) -> TextureRect:
-        return _gem_nodes()[key] as TextureRect
+    func _gem_nodes_get(key: String) -> WorldTextureVisual:
+        return _gem_nodes()[key] as WorldTextureVisual
 
-    func _gem_nodes_set(key: String, value: TextureRect) -> void:
+    func _gem_nodes_set(key: String, value: WorldTextureVisual) -> void:
         _gem_nodes()[key] = value
 
     func _gem_nodes_erase(key: String) -> void:
@@ -2097,58 +2077,66 @@ class MapDebugView extends Control:
     func _gem_nodes() -> Dictionary:
         return view._gem_nodes
 
-    func _sync_spawner(scale_value: float) -> void:
-        if runtime == null or not is_instance_valid(spawner_decoration) or spawner_decoration.texture == null: return
-        var source_size := spawner_decoration.texture.get_size()
-        if source_size.y <= 0.0: return
-        var target_height := scale_value * 4.0 * map_zoom
-        var target_size := source_size * (target_height / source_size.y)
-        spawner_decoration.size = target_size
-        var spawn_center := (Vector2(runtime.map.spawn) + Vector2(0.5, 0.95)) * scale_value * map_zoom + map_pan
-        spawner_decoration.position = board_origin + spawn_center - Vector2(target_size.x * 0.5, target_size.y)
-
-    func _sync_stone_sprites(cell_size: Vector2) -> void:
+    func _sync_stone_sprites() -> void:
         if runtime == null or not is_instance_valid(stone_layer): return
         var live := {}
-        var visual_cell_size := minf(cell_size.x, cell_size.y)
-        var target_visible_size := visual_cell_size * GemAssetLibrary.STONE_VISIBLE_CELLS * map_zoom
+        var visual_cell_size := AUTHORED_MAP_SIZE.y / 36.0
+        var target_visible_size := visual_cell_size * GemAssetLibrary.STONE_VISIBLE_CELLS
         var target_max_size := target_visible_size / StoneDecoration.VISIBLE_MAX_FRACTION
+        var authored_root := authored_map as MapEditorRoot
         for cell: Vector2i in runtime.construction.stones:
             var key := str(cell)
             live[key] = true
-            var sprite := stone_nodes.get(key) as StoneDecoration
-            if not is_instance_valid(sprite):
-                sprite = StoneDecoration.new()
+            var visual := stone_nodes.get(key) as WorldTextureVisual
+            if not is_instance_valid(visual):
+                visual = WorldTextureVisual.new()
+                visual.name = "Stone_%s_%s" % [cell.x, cell.y]
+                var sprite := StoneDecoration.new()
                 sprite.cell = cell
                 sprite.stone_clicked.connect(_on_stone_sprite_clicked)
-                stone_layer.add_child(sprite)
-                stone_nodes[key] = sprite
+                visual.attach_visual(sprite)
+                stone_layer.add_child(visual)
+                stone_nodes[key] = visual
             else:
-                sprite.cell = cell
+                (visual.visual as StoneDecoration).cell = cell
+            var sprite := visual.visual as StoneDecoration
             if sprite.texture == null: continue
-            # A tower visually rises into the cell directly above its logical
-            # footprint. Keep a stone in that cell behind the tower, while all
-            # other stones retain their foreground layer.
-            sprite.z_index = -3 if _stone_is_directly_above_tower(cell) else 0
             var source_size := sprite.texture.get_size()
             var max_dimension := maxf(source_size.x, source_size.y)
             if max_dimension <= 0.0: continue
             var display_size := source_size * (target_max_size / max_dimension)
-            sprite.size = display_size
-            sprite.position = _cell_view_position(cell, Vector2.ONE * 0.5, cell_size) - display_size * 0.5
+            visual.position = authored_root.logical_cell_base_to_authored(cell, 0.75)
+            visual.set_visual_rect(display_size, Vector2(0.5, 0.78))
         for key in stone_nodes.keys():
             if not live.has(key):
-                var stale := stone_nodes[key] as StoneDecoration
+                var stale := stone_nodes[key] as WorldTextureVisual
                 if is_instance_valid(stale): stale.queue_free()
                 stone_nodes.erase(key)
 
-    func _stone_is_directly_above_tower(stone_cell: Vector2i) -> bool:
-        if runtime == null: return false
-        var tower_cell := stone_cell + Vector2i.DOWN
-        for gem: GemInstance in runtime.construction.board_gems:
-            var is_tower_visual := runtime.phases.phase == GamePhaseMachine.Phase.COMBAT or gem.round_id < runtime.construction.round_id
-            if is_tower_visual and gem.cell == tower_cell: return true
-        return false
+    func _sync_enemy_nodes() -> void:
+        if runtime == null or view == null or world_y_sort == null or authored_map == null: return
+        var live := {}
+        var authored_root := authored_map as MapEditorRoot
+        for enemy: EnemyRuntime in runtime.combat.enemies:
+            if not enemy.is_alive(): continue
+            var key := str(enemy.get_instance_id())
+            live[key] = true
+            var visual := enemy_nodes.get(key) as EnemyVisualNode
+            if not is_instance_valid(visual):
+                visual = EnemyVisualNode.new()
+                visual.name = "Enemy_%s" % key
+                visual.runtime = runtime
+                visual.view = view
+                visual.enemy = enemy
+                world_y_sort.add_child(visual)
+                enemy_nodes[key] = visual
+            visual.position = authored_root.logical_world_to_authored(enemy.position)
+            visual.queue_redraw()
+        for key in enemy_nodes.keys():
+            if not live.has(key):
+                var stale := enemy_nodes[key] as EnemyVisualNode
+                if is_instance_valid(stale): stale.queue_free()
+                enemy_nodes.erase(key)
 
     func _on_stone_sprite_clicked(cell: Vector2i) -> void:
         if runtime == null or runtime.phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or not runtime.construction.stones.has(cell): return
@@ -2189,14 +2177,12 @@ class MapDebugView extends Control:
         if authored_map == null:
             return
         var authored_decorations := authored_map.get_node_or_null("Decorations")
-        if authored_decorations == null:
-            return
         # Remove authored decoration tiles when a gem is built on their cell;
         # this does not touch the fence layer or any logical/path cell data.
         var authored_cell := cell
         var authored_root := authored_map as MapEditorRoot
         if authored_root != null and decoration_index != null:
-            decoration_index.rebuild(authored_decorations)
+            decoration_index.rebuild(authored_map)
             var authored_rect := authored_root.logical_cell_to_authored_rect(cell)
             for group: Dictionary in decoration_index.groups_for_placement(authored_rect):
                 decoration_index.erase_group(group)
@@ -2204,7 +2190,7 @@ class MapDebugView extends Control:
             # Keep the old single-cell fallback for malformed/legacy maps.
             if authored_root != null:
                 authored_cell = authored_root._logical_to_authored_cell(cell)
-            for layer_name in ["DecorationTiles", "DecorationForeground"]:
+            for layer_name in ["FlatDetails", "FlatDetailsForeground"]:
                 var tile_layer := authored_decorations.get_node_or_null(layer_name) as TileMapLayer
                 if tile_layer != null:
                     tile_layer.erase_cell(authored_cell)
@@ -2212,6 +2198,15 @@ class MapDebugView extends Control:
             if child is MapDecorationMarker and (child as MapDecorationMarker).cell == cell:
                 child.queue_free()
     func _gui_input(event: InputEvent) -> void:
+        # Container layout can settle after the first frame. Resolve pointer
+        # cells from the current board rect so the first hover/click uses the
+        # same origin as the rendered map (without requiring a preliminary
+        # click to initialize it).
+        if size.x > 0.0 and size.y > 0.0:
+            var current_board_rect := _board_rect()
+            board_origin = current_board_rect.position
+            if authored_map != null and current_board_rect.size != Vector2.ZERO:
+                _sync_authored_map_transform(current_board_rect)
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
             view._close_context_popup_for_camera_change()
             map_zoom = clampf(map_zoom + 0.1, 0.65, 2.5); _center_zoom(); _clamp_pan(); queue_redraw(); sync_gem_sprites(); return
@@ -2232,8 +2227,9 @@ class MapDebugView extends Control:
             queue_redraw()
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and runtime != null:
             var cell := _cell_at(event.position)
+            var pointer_tower := _tower_at_pointer(event.position)
             if runtime.phases.phase == GamePhaseMachine.Phase.CONSTRUCTION:
-                var tower := _tower_at_cell(cell)
+                var tower := pointer_tower if pointer_tower != null else _tower_at_cell(cell)
                 var gem := runtime.construction.gem_at_cell(cell)
                 if tower != null:
                     view.place_gem_mode = false
@@ -2255,11 +2251,15 @@ class MapDebugView extends Control:
                 view._set_map_cursor(hover_can_place)
             else:
                 var clicked_entity := false
-                for tower in runtime.combat.towers:
-                    if tower.position.distance_to(Vector2(cell) * 100.0 + Vector2.ONE * 50.0) < 80.0:
-                        view.selection.select(SelectionState.Kind.TOWER, tower); clicked_entity = true; view._open_combination_popup_for(tower.gem); queue_redraw(); return
-                for enemy in runtime.combat.enemies:
-                    if enemy.is_alive() and enemy.position.distance_to(Vector2(cell) * 100.0 + Vector2.ONE * 50.0) < 80.0: view.selection.select(SelectionState.Kind.ENEMY, enemy); clicked_entity = true; break
+                if pointer_tower != null:
+                    view.selection.select(SelectionState.Kind.TOWER, pointer_tower); clicked_entity = true; view._open_combination_popup_for(pointer_tower.gem); queue_redraw(); return
+                var pointer_enemy := _enemy_at_pointer(event.position)
+                if pointer_enemy != null:
+                    view.selection.select(SelectionState.Kind.ENEMY, pointer_enemy); clicked_entity = true
+                else:
+                    for enemy in runtime.combat.enemies:
+                        if enemy.is_alive() and enemy.position.distance_to(Vector2(cell) * 100.0 + Vector2.ONE * 50.0) < 80.0:
+                            view.selection.select(SelectionState.Kind.ENEMY, enemy); clicked_entity = true; break
                 if not clicked_entity: view.selection.clear()
             queue_redraw()
 
@@ -2270,6 +2270,48 @@ class MapDebugView extends Control:
             if tower != null and tower.position.distance_to(center) < 80.0:
                 return tower
         return null
+
+    func _tower_at_pointer(pointer_position: Vector2) -> TowerRuntime:
+        if runtime == null or authored_map == null:
+            return null
+        var authored_root := authored_map as MapEditorRoot
+        if authored_root == null:
+            return null
+        var pointer_global: Vector2 = get_global_transform_with_canvas() * pointer_position
+        var nearest: TowerRuntime = null
+        var nearest_distance := INF
+        for tower: TowerRuntime in runtime.combat.towers:
+            if tower == null:
+                continue
+            var authored_position := authored_root.logical_world_to_authored(tower.position)
+            var tower_global := authored_map.to_global(authored_position)
+            var distance: float = pointer_global.distance_to(tower_global)
+            if distance < nearest_distance:
+                nearest_distance = distance
+                nearest = tower
+        var hit_radius := maxf(18.0, _cell_view_size().y * map_zoom * 1.25)
+        return nearest if nearest != null and nearest_distance <= hit_radius else null
+
+    func _enemy_at_pointer(pointer_position: Vector2) -> EnemyRuntime:
+        if runtime == null or authored_map == null:
+            return null
+        var authored_root := authored_map as MapEditorRoot
+        if authored_root == null:
+            return null
+        var pointer_global: Vector2 = get_global_transform_with_canvas() * pointer_position
+        var nearest: EnemyRuntime = null
+        var nearest_distance := INF
+        for enemy: EnemyRuntime in runtime.combat.enemies:
+            if enemy == null or not enemy.is_alive():
+                continue
+            var authored_position := authored_root.logical_world_to_authored(enemy.position)
+            var enemy_global := authored_map.to_global(authored_position)
+            var distance: float = pointer_global.distance_to(enemy_global)
+            if distance < nearest_distance:
+                nearest_distance = distance
+                nearest = enemy
+        var hit_radius := maxf(18.0, _cell_view_size().y * map_zoom * 1.25)
+        return nearest if nearest != null and nearest_distance <= hit_radius else null
 
     func _board_rect() -> Rect2:
         if size.x <= 0.0 or size.y <= 0.0:
@@ -2290,6 +2332,11 @@ class MapDebugView extends Control:
         return _board_rect().size / 36.0
 
     func _cell_view_position(cell: Vector2i, anchor: Vector2, cell_size: Vector2 = Vector2.ZERO) -> Vector2:
+        var authored_root := authored_map as MapEditorRoot
+        if authored_root != null:
+            var authored_point := authored_root.logical_world_to_authored((Vector2(cell) + anchor) * 100.0)
+            var fit_scale := _board_rect().size.x / AUTHORED_MAP_SIZE.x
+            return board_origin + map_pan + authored_point * fit_scale * map_zoom
         var resolved_cell_size := cell_size if cell_size != Vector2.ZERO else _cell_view_size()
         return board_origin + map_pan + (Vector2(cell) + anchor) * resolved_cell_size * map_zoom
 
@@ -2300,8 +2347,16 @@ class MapDebugView extends Control:
         return global_position + _cell_view_position(cell, Vector2.ONE * 0.5)
     func _cell_at(position: Vector2) -> Vector2i:
         var cell_size := _cell_view_size()
-        var local := (position - board_origin - map_pan) / map_zoom
-        return Vector2i(floori(local.x / cell_size.x), floori(local.y / cell_size.y))
+        if cell_size.x <= 0.0 or cell_size.y <= 0.0 or map_zoom <= 0.0:
+            return Vector2i(-1, -1)
+        var fit_scale := _board_rect().size.x / AUTHORED_MAP_SIZE.x
+        if fit_scale <= 0.0:
+            return Vector2i(-1, -1)
+        var authored := (position - _board_rect().position - map_pan) / (map_zoom * fit_scale)
+        var authored_cell := authored / MapEditorRoot.CELL_SIZE
+        var logical_x := authored_cell.x * 36.0 / float(MapEditorRoot.GRID_WIDTH)
+        var logical_y := (authored_cell.y - 3.5) * 29.0 / 32.0 + 3.5
+        return Vector2i(floori(logical_x), floori(logical_y))
 
     func _clamp_pan() -> void:
         var board_size := _board_rect().size
@@ -2316,22 +2371,35 @@ class MapDebugView extends Control:
         map_pan = (board_size - board_size * map_zoom) * 0.5
     func _can_preview_placement(cell: Vector2i) -> bool:
         return runtime != null and runtime.construction.can_place_at(cell)
+
+    func _is_horizontal_route_cell(cell: Vector2i) -> bool:
+        if runtime == null or runtime.map == null:
+            return false
+        return runtime.map.route_cells.has(cell + Vector2i.LEFT) and runtime.map.route_cells.has(cell + Vector2i.RIGHT)
     func _draw() -> void:
+        if is_instance_valid(runtime_overlay):
+            runtime_overlay.queue_redraw()
+
+    func _draw_runtime_overlay(canvas: CanvasItem) -> void:
         if runtime == null: return
         var board_size := _board_rect().size
         var cell_size := board_size / 36.0
         var visual_cell_size := minf(cell_size.x, cell_size.y)
-        draw_set_transform(board_origin + map_pan, 0.0, Vector2.ONE * map_zoom)
+        canvas.draw_set_transform(board_origin + map_pan, 0.0, Vector2.ONE * map_zoom)
         if hover_cell.x >= 0 and runtime.phases.phase == GamePhaseMachine.Phase.CONSTRUCTION:
-            var hover_rect := Rect2(Vector2(hover_cell) * cell_size, cell_size)
+            var authored_root := authored_map as MapEditorRoot
+            var fit_scale := board_size.x / AUTHORED_MAP_SIZE.x
+            var authored_hover_rect := authored_root.logical_cell_to_runtime_authored_rect(hover_cell) if authored_root != null else Rect2(Vector2(hover_cell) * cell_size, cell_size)
+            var hover_rect := Rect2(authored_hover_rect.position * fit_scale, authored_hover_rect.size * fit_scale)
             var outline_color := Color("ffd477") if hover_can_place else Color("e66b6b")
-            draw_rect(hover_rect.grow(-1.0), outline_color, false, 2.0)
+            canvas.draw_rect(hover_rect.grow(-1.0), outline_color, false, 2.0)
         for gem: GemInstance in runtime.construction.board_gems:
             var p := (Vector2(gem.cell)+Vector2.ONE*0.5)*cell_size
         for cell: Vector2i in runtime.construction.stones:
-            var stone := stone_nodes.get(str(cell)) as StoneDecoration
+            var stone_visual := stone_nodes.get(str(cell)) as WorldTextureVisual
+            var stone := stone_visual.visual as StoneDecoration if is_instance_valid(stone_visual) else null
             if not is_instance_valid(stone) or stone.texture == null:
-                draw_circle((Vector2(cell)+Vector2.ONE*0.5)*cell_size, maxf(4.0, visual_cell_size * 0.3), Color("8b8f9a"))
+                canvas.draw_circle((Vector2(cell)+Vector2.ONE*0.5)*cell_size, maxf(4.0, visual_cell_size * 0.3), Color("8b8f9a"))
         var range_center := Vector2.ZERO
         var range_units := -1.0
         if view.selection.kind == SelectionState.Kind.TOWER:
@@ -2346,12 +2414,12 @@ class MapDebugView extends Control:
                 range_center = (Vector2(selected_gem.cell) + Vector2.ONE * 0.5) * cell_size
                 range_units = TowerCombatStats.from_gem(selected_gem, definition).range_units
         if range_units >= 0.0:
-            draw_circle(range_center, maxf(12.0, range_units / 100.0 * visual_cell_size), Color(1.0, 0.82, 0.35, 0.72), false, 3.0)
+            canvas.draw_circle(range_center, maxf(12.0, range_units / 100.0 * visual_cell_size), Color(1.0, 0.82, 0.35, 0.72), false, 3.0)
         for projectile: HomingProjectile in runtime.combat.projectiles:
-            _draw_projectile(projectile, cell_size)
+            _draw_projectile(projectile, cell_size, canvas)
         # Reset the projectile's rotated transform before drawing the impact
         # marker in board coordinates.
-        draw_set_transform(board_origin + map_pan, 0.0, Vector2.ONE * map_zoom)
+        canvas.draw_set_transform(board_origin + map_pan, 0.0, Vector2.ONE * map_zoom)
         var now_ms := Time.get_ticks_msec()
         for index in range(damage_feedbacks.size() - 1, -1, -1):
             var feedback: Dictionary = damage_feedbacks[index]
@@ -2364,19 +2432,19 @@ class MapDebugView extends Control:
             var progress := clampf(age / 0.45, 0.0, 1.0)
             var radius := maxf(7.0, visual_cell_size * (0.12 + progress * 0.14))
             var alpha := 0.85 * (1.0 - progress)
-            draw_circle(impact_point, radius, Color(1.0, 0.42, 0.22, alpha), false, maxf(2.0, visual_cell_size * 0.035))
-            draw_circle(impact_point, maxf(2.0, radius * 0.28), Color(1.0, 0.88, 0.48, alpha * 0.9))
+            canvas.draw_circle(impact_point, radius, Color(1.0, 0.42, 0.22, alpha), false, maxf(2.0, visual_cell_size * 0.035))
+            canvas.draw_circle(impact_point, maxf(2.0, radius * 0.28), Color(1.0, 0.88, 0.48, alpha * 0.9))
         if not damage_feedbacks.is_empty():
-            queue_redraw()
-        draw_set_transform(board_origin + map_pan, 0.0, Vector2.ONE * map_zoom)
+            canvas.queue_redraw()
+        canvas.draw_set_transform(board_origin + map_pan, 0.0, Vector2.ONE * map_zoom)
 
-    func _draw_projectile(projectile: HomingProjectile, cell_size: Vector2) -> void:
+    func _draw_projectile(projectile: HomingProjectile, cell_size: Vector2, canvas: CanvasItem) -> void:
         var projectile_point := _world_view_position(projectile.position, cell_size)
         var projectile_size := maxf(12.0, minf(cell_size.x, cell_size.y) * 1.05)
         var frame := int(Time.get_ticks_msec() / 90.0) % 4
         var row := _projectile_color_row(projectile.source_gem_id)
-        draw_set_transform(board_origin + map_pan + projectile_point * map_zoom, projectile.direction.angle(), Vector2.ONE * map_zoom)
-        draw_texture_rect_region(PROJECTILE_TEXTURE, Rect2(Vector2.ONE * projectile_size * -0.5, Vector2.ONE * projectile_size), Rect2(frame * 32.0, row * 32.0, 32.0, 32.0))
+        canvas.draw_set_transform(board_origin + map_pan + projectile_point * map_zoom, projectile.direction.angle(), Vector2.ONE * map_zoom)
+        canvas.draw_texture_rect_region(PROJECTILE_TEXTURE, Rect2(Vector2.ONE * projectile_size * -0.5, Vector2.ONE * projectile_size), Rect2(frame * 32.0, row * 32.0, 32.0, 32.0))
 
     func _projectile_color_row(gem_id: StringName) -> int:
         match view._gem_color_key(gem_id):
@@ -2388,47 +2456,74 @@ class MapDebugView extends Control:
     func _gem_color(gem: GemInstance) -> Color:
         var colors := {&"amethyst":Color("b78cff"),&"aquamarine":Color("68d8e8"),&"diamond":Color("e9f6ff"),&"emerald":Color("55d889"),&"opal":Color("f3a7d8"),&"ruby":Color("ef6262"),&"sapphire":Color("6598ff"),&"topaz":Color("f4c95d")}; return colors.get(gem.id, Color("d99b50"))
 
-class EnemyVisualLayer extends Control:
-    var runtime: GameRuntime
-    var view: GameplayView
+class RuntimeOverlay extends Control:
     var map_view: GameplayView.MapDebugView
 
     func _draw() -> void:
-        if runtime == null or view == null or map_view == null: return
-        var board_size := map_view._board_rect().size
-        var cell_size := board_size / 36.0
-        var visual_cell_size := minf(cell_size.x, cell_size.y)
-        draw_set_transform(map_view.board_origin + map_view.map_pan, 0.0, Vector2.ONE * map_view.map_zoom)
-        for enemy: EnemyRuntime in runtime.combat.enemies:
-            if not enemy.is_alive(): continue
-            var p := map_view._world_view_position(enemy.position, cell_size)
-            var is_boss := runtime.current_wave_is_boss
-            var is_invisible := enemy.profile_id == &"invisible_spider_w8" and not is_boss
-            var enemy_size := maxf(24.0, visual_cell_size * (2.4 if is_boss else 1.95))
-            var frame := int(Time.get_ticks_msec() / 160) % 3
-            var direction := Vector2.ZERO
-            if enemy.path_index < enemy.path.size() - 1: direction = enemy.path[enemy.path_index + 1] - enemy.position
-            var row := view._enemy_direction_row(direction, is_boss)
-            var enemy_sheet := view._enemy_sheet(enemy.profile_id, runtime.current_wave_is_boss)
-            var vertical_x_offset := 0.0
-            if row == 0:
-                vertical_x_offset = -enemy_size * 0.07
-            elif row == 3:
-                vertical_x_offset = -enemy_size * 0.10
-            var feet_offset := enemy_size * (0.03 if is_boss else 0.08)
-            var enemy_visual_offset := Vector2(vertical_x_offset, feet_offset)
-            if enemy_sheet != null:
-                var frame_size := Vector2(enemy_sheet.get_width() / 3.0, enemy_sheet.get_height() / 4.0)
-                var sprite_modulate := Color(1.0, 1.0, 1.0, 0.72) if is_invisible else Color.WHITE
-                var enemy_rect := Rect2(Vector2(p.x - enemy_size * 0.5, p.y - enemy_size) + enemy_visual_offset, Vector2.ONE * enemy_size)
-                draw_texture_rect_region(enemy_sheet, enemy_rect, Rect2(frame * frame_size.x, row * frame_size.y, frame_size.x, frame_size.y), sprite_modulate)
-            var health_ratio := clampf(enemy.hp / maxf(enemy.max_hp, 0.001), 0.0, 1.0)
-            var is_ghost := enemy.profile_id == &"thrilling_ghost_w40"
-            var health_bar_size := 5.0 if is_boss and not is_ghost else 4.0
-            var health_bar_color := Color("ffd56a") if is_boss and not is_ghost else (Color("c9c7ff") if is_invisible else Color("e66b6b"))
-            var health_bar_rect := Rect2(p + enemy_visual_offset + Vector2(-enemy_size * 0.42, -enemy_size - health_bar_size - 2.0), Vector2(enemy_size * 0.84, health_bar_size))
-            draw_rect(health_bar_rect, Color("3a1820"))
-            draw_rect(Rect2(health_bar_rect.position, Vector2(health_bar_rect.size.x * health_ratio, health_bar_size)), health_bar_color)
+        if map_view != null:
+            map_view._draw_runtime_overlay(self)
+
+class WorldTextureVisual extends Node2D:
+    var visual: TextureRect
+
+    func attach_visual(value: TextureRect) -> void:
+        visual = value
+        visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        visual.custom_minimum_size = Vector2.ZERO
+        add_child(visual)
+
+    func set_visual_rect(display_size: Vector2, anchor: Vector2) -> void:
+        if not is_instance_valid(visual): return
+        visual.size = display_size
+        visual.position = -anchor * display_size
+
+class EnemyVisualNode extends Node2D:
+    var runtime: GameRuntime
+    var view: GameplayView
+    var enemy: EnemyRuntime
+
+    func _draw() -> void:
+        if runtime == null or view == null or enemy == null or not enemy.is_alive(): return
+        var visual_cell_size := 640.0 / 36.0
+        var is_boss := runtime.current_wave_is_boss
+        var is_invisible := enemy.profile_id == &"invisible_spider_w8" and not is_boss
+        var enemy_size := visual_cell_size * (2.4 if is_boss else 1.95)
+        var frame := int(Time.get_ticks_msec() / 160) % 3
+        var direction := Vector2.ZERO
+        if enemy.path_index < enemy.path.size() - 1: direction = enemy.path[enemy.path_index + 1] - enemy.position
+        var row := view._enemy_direction_row(direction, is_boss)
+        var enemy_sheet := view._enemy_sheet(enemy.profile_id, runtime.current_wave_is_boss)
+        var vertical_x_offset := 0.0
+        if row == 0:
+            vertical_x_offset = -enemy_size * 0.07
+        elif row == 3:
+            vertical_x_offset = -enemy_size * 0.10
+        var feet_offset := enemy_size * (0.03 if is_boss else 0.08)
+        var enemy_visual_offset := Vector2(vertical_x_offset, feet_offset)
+        # The route art is slightly lower on horizontal segments. Keep the
+        # EnemyVisualNode root unchanged so Y-sort and pathfinding still use
+        # the exact logical enemy position; only the artwork follows the road
+        # surface a little more closely.
+        var route_cell := Vector2i(floori(enemy.position.x / 100.0), floori(enemy.position.y / 100.0))
+        var on_horizontal_segment := absf(direction.x) > absf(direction.y) and absf(direction.x) > 0.01
+        if runtime.map != null and runtime.map.route_cells.has(route_cell + Vector2i.LEFT) and runtime.map.route_cells.has(route_cell + Vector2i.RIGHT):
+            on_horizontal_segment = true
+        if on_horizontal_segment:
+            # Keep the gameplay anchor centered on its logical cell, while
+            # lowering only the artwork to sit naturally on horizontal roads.
+            enemy_visual_offset.y += enemy_size * 0.28
+        if enemy_sheet != null:
+            var frame_size := Vector2(enemy_sheet.get_width() / 3.0, enemy_sheet.get_height() / 4.0)
+            var sprite_modulate := Color(1.0, 1.0, 1.0, 0.72) if is_invisible else Color.WHITE
+            var enemy_rect := Rect2(Vector2(-enemy_size * 0.5, -enemy_size) + enemy_visual_offset, Vector2.ONE * enemy_size)
+            draw_texture_rect_region(enemy_sheet, enemy_rect, Rect2(frame * frame_size.x, row * frame_size.y, frame_size.x, frame_size.y), sprite_modulate)
+        var health_ratio := clampf(enemy.hp / maxf(enemy.max_hp, 0.001), 0.0, 1.0)
+        var is_ghost := enemy.profile_id == &"thrilling_ghost_w40"
+        var health_bar_size := 5.0 if is_boss and not is_ghost else 4.0
+        var health_bar_color := Color("ffd56a") if is_boss and not is_ghost else (Color("c9c7ff") if is_invisible else Color("e66b6b"))
+        var health_bar_rect := Rect2(enemy_visual_offset + Vector2(-enemy_size * 0.42, -enemy_size - health_bar_size - 2.0), Vector2(enemy_size * 0.84, health_bar_size))
+        draw_rect(health_bar_rect, Color("3a1820"))
+        draw_rect(Rect2(health_bar_rect.position, Vector2(health_bar_rect.size.x * health_ratio, health_bar_size)), health_bar_color)
 
 
 class MapTerrainLayer extends Control:
@@ -3097,49 +3192,6 @@ class FlagDecoration extends TextureRect:
         if next_frame == current_frame: return
         current_frame = next_frame
         atlas.region = Rect2(current_frame * 32, 0, 32, 64)
-
-class SpawnerDecoration extends TextureRect:
-    const FRAME_PATHS := [
-        "res://assets/art/gameplay/environment/spawner/spawn_monster.png",
-    ]
-
-    func _ready() -> void:
-        mouse_filter = Control.MOUSE_FILTER_IGNORE
-        texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-        expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-        var frame_index := randi_range(0, FRAME_PATHS.size() - 1)
-        texture = load(FRAME_PATHS[frame_index]) as Texture2D
-        if texture == null: push_warning("Spawner texture missing: %s" % FRAME_PATHS[frame_index])
-
-class CastleCheckpointDecoration extends TextureRect:
-    const CASTLE_PATH := "res://assets/art/gameplay/environment/landmarks/castle/castle_checkpoint.png"
-    const CASTLE_HEIGHT_CELLS := 8.16
-    # The asset's wooden gate is on its left face. Anchor that gate to the
-    # checkpoint instead of anchoring the texture's geometric center.
-    const CASTLE_ENTRY_U := 0.215
-    const CASTLE_ENTRY_V := 0.456
-    const CASTLE_INSET_X_CELLS := -3.0
-    const CASTLE_INSET_Y_CELLS := -0.5
-
-    func _ready() -> void:
-        texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-        expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-        texture = load(CASTLE_PATH) as Texture2D
-        if texture == null: push_warning("Castle checkpoint texture missing: %s" % CASTLE_PATH)
-
-    func sync_cell(cell: Vector2i, cell_size: float, map_zoom: float, map_pan: Vector2, board_origin: Vector2) -> void:
-        if texture == null: return
-        var source_size := texture.get_size()
-        var target_height := cell_size * CASTLE_HEIGHT_CELLS * map_zoom
-        var display_size := source_size * (target_height / maxf(1.0, source_size.y))
-        var checkpoint := board_origin + map_pan + (Vector2(cell) + Vector2(0.5 + CASTLE_INSET_X_CELLS, 0.5 + CASTLE_INSET_Y_CELLS)) * cell_size * map_zoom
-        size = display_size
-        # Place the wooden entrance on the final checkpoint. The building may
-        # extend beyond the map border, which is intentional for the corner
-        # landmark and does not change the one-cell logical endpoint.
-        position = checkpoint - Vector2(display_size.x * CASTLE_ENTRY_U, display_size.y * CASTLE_ENTRY_V)
 
 class StoneDecoration extends TextureRect:
     signal stone_clicked(cell: Vector2i)

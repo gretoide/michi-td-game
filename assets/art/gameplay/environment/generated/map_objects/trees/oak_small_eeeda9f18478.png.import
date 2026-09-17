@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://nsgj2ui6uqw7"
-path="res://.godot/imported/1.png-59696ffd0c9bb763dd44a5ef77336d78.ctex"
+uid="uid://dwr3spyi3bdqp"
+path="res://.godot/imported/oak_small_eeeda9f18478.png-072901160f22699864fb504f6a8bf710.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/gameplay/environment/landmarks/campfire/1.png"
-dest_files=["res://.godot/imported/1.png-59696ffd0c9bb763dd44a5ef77336d78.ctex"]
+source_file="res://assets/art/gameplay/environment/generated/map_objects/trees/oak_small_eeeda9f18478.png"
+dest_files=["res://.godot/imported/oak_small_eeeda9f18478.png-072901160f22699864fb504f6a8bf710.ctex"]
 
 [params]
 

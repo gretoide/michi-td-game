@@ -40,8 +40,11 @@ func run(suite: FoundationTestSuite) -> void:
 	var kept := keep_runtime.construction.current_gems[0]
 	suite.expect(keep_runtime.construction.keep(kept), "Keep finalizes a full construction")
 	suite.expect_equal(keep_runtime.construction.stones.size(), 4, "Keep converts four unselected gems to stones")
+	suite.expect(not keep_runtime.construction.select_stone(keep_cells[1]), "Combat cannot select a stone for construction actions")
+	suite.expect(not keep_runtime.construction.remove_stone(keep_cells[1]), "Combat cannot remove a stone")
+	keep_runtime.phases.resolve_combat()
 	suite.expect(keep_runtime.construction.select_stone(keep_cells[1]), "Construction can select an existing stone without placing a gem")
-	suite.expect(keep_runtime.construction.remove_stone(keep_cells[1]), "Remove Stone releases a stone cell")
+	suite.expect(keep_runtime.construction.remove_stone(keep_cells[1]), "Remove Stone releases a stone cell during construction")
 
 	var degrade_runtime := GameRuntime.new(); degrade_runtime.initialize(14)
 	for index in 5:
