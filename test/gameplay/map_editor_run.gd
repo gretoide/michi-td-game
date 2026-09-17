@@ -70,7 +70,12 @@ func _init() -> void:
 		assert(not lamp.snap_to_grid)
 		assert(lamp.get_node("Visual") is Sprite2D)
 		lamp.free()
-	assert(authored.get_node("WorldYSort/Props").get_child_count() == 10)
+	var props := authored.get_node("WorldYSort/Props")
+	var lamp_count := 0
+	for prop in props.get_children():
+		if prop.name.begins_with("Lamp_"):
+			lamp_count += 1
+	assert(lamp_count == 10)
 	assert(authored.get_node("Foreground").z_index == 50)
 	assert(authored.get_node("WorldEffects").z_index == 75)
 	for x in range(1, 63):

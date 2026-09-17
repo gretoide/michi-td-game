@@ -47,6 +47,18 @@ func _init() -> void:
     suite.expect_equal(localization.tr_key("game.player.level", {"level": 2}), "Level 2", "MIC-81 English player level is localized")
     localization.locale = "es"
     suite.expect_equal(localization.tr_key("game.player.level", {"level": 2}), "Nivel 2", "MIC-81 Spanish player level is localized")
+    for definition: GemDefinition in runtime.foundation.catalog.gems:
+        for level_data: Dictionary in definition.levels:
+            var display_ability := str(level_data.get("ability", "")).to_lower().strip_edges().replace("-", "_").replace(" ", "_")
+            var ability_parts: Array = Array(display_ability.split("_", false))
+            if not ability_parts.is_empty() and ability_parts[-1].is_valid_int(): ability_parts.pop_back()
+            if not ability_parts.is_empty():
+                var ability_key := "_".join(ability_parts)
+                suite.expect(not localization.tr_key("game.ability.%s" % ability_key).begins_with("game."), "base ability %s has a localized UI description" % ability_key)
+    for recipe: RecipeDefinition in runtime.foundation.catalog.recipes:
+        for ability in recipe.ability_ids:
+            if str(ability) in ["spell_steal_placeholder_v1", "sin_efecto"]: continue
+            suite.expect(not localization.tr_key("game.ability.%s" % str(ability)).begins_with("game."), "recipe ability %s has a localized UI description" % ability)
     suite.expect(not localization.tr_key("game.command.place_gem").begins_with("game."), "M6 never renders raw localization keys")
     var progression := runtime.progression
     progression.add_xp(2400)
@@ -67,6 +79,18 @@ func _init() -> void:
         var definition := runtime.foundation.catalog.gem_definition_for_id(gem_id) as GemDefinition
         var level_two := GemInstance.new(gem_id, 2, GemInstance.Quality.FLAWED)
         suite.expect_equal(int(TowerCombatStats.level_data_for(level_two, definition).get("level", 0)), 2, "%s keeps level 2 stats tied to the same gem identity" % gem_id)
+    var sapphire_l3 := GemInstance.new(&"sapphire", 3, GemInstance.Quality.NORMAL)
+    var sapphire_definition := runtime.foundation.catalog.gem_definition_for_id(&"sapphire") as GemDefinition
+    var sapphire_l3_data := TowerCombatStats.level_data_for(sapphire_l3, sapphire_definition)
+    var sapphire_l3_stats := TowerCombatStats.from_gem(sapphire_l3, sapphire_definition)
+    suite.expect_equal(int(sapphire_l3_data.get("level", 0)), 3, "MIC-83 keeps Normal Sapphire at level 3 in the selected data row")
+    suite.expect_equal(str(sapphire_l3_data.get("ability", "")), "Slow 3", "MIC-83 keeps the level-three ability attached to the same gem")
+    suite.expect_equal(int(sapphire_l3_stats.damage), 6, "MIC-83 uses level-three damage instead of the level-one fallback")
+    suite.expect_equal(int(sapphire_l3_stats.range_units), 600, "MIC-83 uses level-three range instead of the level-one fallback")
+    suite.expect(GemAssetLibraryScript.new().get_gem_texture(&"sapphire", 3) != null, "MIC-83 maps the Normal Sapphire to its level-three visual")
+    var sapphire_tower := TowerRuntime.new()
+    sapphire_tower.setup(sapphire_l3, sapphire_definition, Vector2.ZERO)
+    suite.expect(sapphire_tower.abilities.has("slow"), "MIC-83 carries the level-three ability into the runtime tower")
     if suite.failures.is_empty(): print("M6 UI and player experience tests passed")
     else:
         for failure in suite.failures: push_error(failure)
@@ -88,11 +112,11 @@ func _check_enemy_visual(suite, visual: Dictionary) -> void:
     suite.expect(icon != null, "%s icon loads" % visual.name)
     if sheet != null:
         suite.expect(sheet.get_width() % 3 == 0 and sheet.get_height() % 4 == 0, "%s sheet is a 3x4 atlas" % visual.name)
-        var sheet_image := Image.load_from_file(visual.sheet)
+        var sheet_image := sheet.get_image()
         suite.expect(sheet_image != null and sheet_image.get_pixel(0, 0).a < 1.0, "%s sheet preserves transparency" % visual.name)
     if icon != null:
         suite.expect(icon.get_width() == icon.get_height(), "%s icon is square" % visual.name)
-        var icon_image := Image.load_from_file(visual.icon)
+        var icon_image := icon.get_image()
         suite.expect(icon_image != null and icon_image.get_pixel(0, 0).a < 1.0, "%s icon preserves transparency" % visual.name)
     if sheet != null and icon != null:
         suite.expect(sheet.get_width() == icon.get_width() * 3 and sheet.get_height() == icon.get_height() * 4, "%s atlas frames match icon dimensions" % visual.name)
@@ -105,8 +129,8 @@ func _check_base_gem_assets(suite) -> void:
     suite.expect(tower_dimensions.x > 0 and tower_dimensions.y > 0, "base tower atlas loads")
     suite.expect(gem_dimensions.x % GemAssetLibrary.GRID_COLUMNS == 0 and gem_dimensions.y % GemAssetLibrary.GRID_ROWS == 0, "base gem atlas has uniform 8x7 cells")
     suite.expect(tower_dimensions.x % GemAssetLibrary.GRID_COLUMNS == 0 and tower_dimensions.y % GemAssetLibrary.GRID_ROWS == 0, "base tower atlas has uniform 8x7 cells")
-    var gem_image := Image.load_from_file(GemAssetLibrary.GEM_ATLAS_PATH)
-    var tower_image := Image.load_from_file(GemAssetLibrary.TOWER_ATLAS_PATH)
+    var gem_image := (load(GemAssetLibrary.GEM_ATLAS_PATH) as Texture2D).get_image()
+    var tower_image := (load(GemAssetLibrary.TOWER_ATLAS_PATH) as Texture2D).get_image()
     suite.expect(gem_image != null and gem_image.get_pixel(0, 0).a < 1.0, "base gem atlas preserves transparency")
     suite.expect(tower_image != null and tower_image.get_pixel(0, 0).a < 1.0, "base tower atlas preserves transparency")
     for gem_id in GemAssetLibrary.BASE_GEM_IDS:

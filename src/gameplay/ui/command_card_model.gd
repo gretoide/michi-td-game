@@ -20,15 +20,15 @@ func rebuild(runtime: GameRuntime, selection: SelectionState) -> void:
 		var selected_stone := selection.kind == SelectionState.Kind.STONE and not selection.is_empty()
 		var selected_tower := selection.kind == SelectionState.Kind.TOWER and not selection.is_empty()
 		var selected_combination_gem: GemInstance = selection.value if selected_gem else (selection.value.gem if selected_tower and selection.value.gem != null else null)
-		# A tower selection is reserved for attack controls; construction
-		# combinations are exposed only when the underlying gem is selected.
-		var can_combine := not selected_tower and selected_combination_gem != null and not runtime.construction.contextual_combinations(selected_combination_gem).is_empty()
+		# Construction combinations use the temporary Gem selection; combat
+		# recipes are available from the selected tower as well.
+		var can_combine := selected_combination_gem != null and (not construction or not selected_tower) and not runtime.construction.contextual_combinations(selected_combination_gem).is_empty()
 		var can_degrade: bool = selected_gem and selection.value.quality > GemInstance.Quality.CHIPPED
 		var enabled := true
 		var visible := false
 		match id:
 			"place_gem": visible = construction and runtime.construction.placed_count() < ConstructionRuntime.MAX_PLACEMENTS and not selected_tower and not selected_stone; enabled = visible
-			"combine": visible = construction and can_combine; enabled = visible
+			"combine": visible = can_combine and (construction or selected_tower); enabled = visible
 			"degrade": visible = construction and can_degrade; enabled = visible
 			"remove_stone": visible = construction and selected_stone; enabled = visible
 			"attack": visible = selected_tower; enabled = visible

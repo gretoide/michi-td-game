@@ -27,5 +27,5 @@ local ignorado por Git). La API se valida por separado con `npm test`,
 `npm run test:e2e` y `npm run build`.
 
 Godot puede informar instancias `ObjectDB` o recursos aún referenciados al
-cerrar los runners headless. Se registran como deuda de limpieza del harness;
+cerrar los runners headless. Se registran como deuda de limpieza de los runners;
 no alteran el código productivo ni el resultado de las aserciones.

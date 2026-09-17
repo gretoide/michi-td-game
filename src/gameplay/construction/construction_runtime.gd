@@ -253,9 +253,20 @@ func find_construction_options(selected: GemInstance) -> Array:
 	return result
 
 func find_board_options(selected: GemInstance) -> Array:
-	# Board combinations are construction actions; combat only selects and
-	# controls towers/enemies.
-	return []
+	if selected == null or phases == null or phases.phase != GamePhaseMachine.Phase.COMBAT:
+		return []
+	var result: Array = []
+	for option in matcher.find_matches(recipes, board_gems, true):
+		if selected not in option.gems:
+			continue
+		var contextual: Dictionary = option.duplicate()
+		contextual["kind"] = &"recipe"
+		contextual["pool"] = &"board"
+		contextual["one_shot"] = false
+		contextual["result_id"] = contextual.recipe.result_id
+		contextual["max_required_level"] = max_required_level(contextual.recipe)
+		result.append(contextual)
+	return result
 
 func contextual_combinations(selected: GemInstance) -> Array:
 	if phases != null and phases.phase == GamePhaseMachine.Phase.CONSTRUCTION:
@@ -280,8 +291,11 @@ func max_required_level(recipe: RecipeDefinition) -> int:
 	return maximum
 
 func execute_recipe(recipe: RecipeDefinition, selected: GemInstance, one_shot := false) -> GemInstance:
-	if phases == null or phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or not one_shot or recipe == null or selected == null: return null
-	if placed_count() != MAX_PLACEMENTS: return null
+	if phases == null or recipe == null or selected == null: return null
+	if one_shot:
+		if phases.phase != GamePhaseMachine.Phase.CONSTRUCTION or placed_count() != MAX_PLACEMENTS: return null
+	else:
+		if phases.phase != GamePhaseMachine.Phase.COMBAT: return null
 	var scope := current_gems if one_shot else board_gems
 	var ingredients := matcher.match_recipe(recipe, scope)
 	if ingredients.is_empty() or selected not in ingredients: return null
@@ -289,10 +303,8 @@ func execute_recipe(recipe: RecipeDefinition, selected: GemInstance, one_shot :=
 	result.cell = selected.cell; result.mvp_level = 0 if one_shot else MvpState.transfer_mvp(ingredients)
 	for gem in ingredients:
 		if gem != selected: _make_stone(gem)
-	if one_shot:
-		_replace_and_finalize(selected, result)
-	else:
-		_replace_board_gem(selected, result)
+	if one_shot: _replace_and_finalize(selected, result)
+	else: _replace_board_gem(selected, result)
 	combination_completed.emit(recipe.id, result)
 	return result
 

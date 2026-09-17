@@ -42,9 +42,13 @@ var gold_value_label: Label
 var player_level_label: Label
 var xp_bar: ProgressBar
 var xp_value_label: Label
+var xp_probability_panel: PanelContainer
+var xp_probability_label: Label
 var progress_bar: ProgressBar
 var progress_name_label: Label
 var progress_value_label: Label
+var enemy_count_separator: Label
+var enemy_count_label: Label
 var feedback_label: Label
 var feedback_key := "game.feedback.help"
 var help_button: Button
@@ -191,19 +195,22 @@ func _build_top_bar(parent: Control) -> void:
     gold_group.add_child(_hud_icon("gold", LocalizationService.tr_key("game.resources.gold")))
     gold_value_label = Label.new(); gold_value_label.add_theme_font_size_override("font_size", 17); gold_group.add_child(gold_value_label)
     row.add_child(_hud_separator())
-    var xp_group := HBoxContainer.new(); xp_group.add_theme_constant_override("separation", 6); xp_group.custom_minimum_size = Vector2(230, 0); xp_group.mouse_filter = Control.MOUSE_FILTER_PASS; row.add_child(xp_group)
+    var xp_group := HBoxContainer.new(); xp_group.add_theme_constant_override("separation", 6); xp_group.custom_minimum_size = Vector2(230, 0); xp_group.mouse_filter = Control.MOUSE_FILTER_STOP; row.add_child(xp_group)
     player_level_label = Label.new(); player_level_label.add_theme_font_size_override("font_size", 17); xp_group.add_child(player_level_label)
     xp_bar = ProgressBar.new(); xp_bar.custom_minimum_size = Vector2(105, 18); xp_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER; xp_bar.show_percentage = false; xp_bar.add_theme_stylebox_override("background", _resource_bar_style(Color("4b3428"))); xp_bar.add_theme_stylebox_override("fill", _resource_bar_style(Color("9c7cff"))); xp_group.add_child(xp_bar)
     xp_value_label = Label.new(); xp_value_label.custom_minimum_size = Vector2(82, 0); xp_value_label.add_theme_font_size_override("font_size", 14); xp_group.add_child(xp_value_label)
-    xp_group.tooltip_text = _player_quality_probability_tooltip()
-    player_level_label.tooltip_text = xp_group.tooltip_text
-    xp_bar.tooltip_text = xp_group.tooltip_text
-    xp_value_label.tooltip_text = xp_group.tooltip_text
+    xp_group.mouse_entered.connect(_show_player_probability_panel.bind(xp_group))
+    xp_group.mouse_exited.connect(_hide_player_probability_panel)
+    _create_player_probability_panel()
     row.add_child(_hud_separator())
-    var progress_group := HBoxContainer.new(); progress_group.add_theme_constant_override("separation", 6); progress_group.custom_minimum_size = Vector2(190, 0); row.add_child(progress_group)
+    var progress_group := HBoxContainer.new(); progress_group.add_theme_constant_override("separation", 6); progress_group.custom_minimum_size = Vector2(300, 0); row.add_child(progress_group)
     progress_name_label = Label.new(); progress_name_label.text = LocalizationService.tr_key("game.player.progress"); progress_name_label.add_theme_font_size_override("font_size", 15); progress_name_label.tooltip_text = LocalizationService.tr_key("game.player.progress"); progress_group.add_child(progress_name_label)
     progress_bar = ProgressBar.new(); progress_bar.custom_minimum_size = Vector2(88, 18); progress_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER; progress_bar.show_percentage = false; progress_bar.add_theme_stylebox_override("background", _resource_bar_style(Color("4b3428"))); progress_bar.add_theme_stylebox_override("fill", _resource_bar_style(Color("d99b50"))); progress_group.add_child(progress_bar)
     progress_value_label = Label.new(); progress_value_label.custom_minimum_size = Vector2(64, 0); progress_value_label.add_theme_font_size_override("font_size", 14); progress_group.add_child(progress_value_label)
+    enemy_count_separator = _hud_separator()
+    enemy_count_separator.name = "EnemyCountSeparator"
+    progress_group.add_child(enemy_count_separator)
+    enemy_count_label = Label.new(); enemy_count_label.custom_minimum_size = Vector2(88, 0); enemy_count_label.add_theme_font_size_override("font_size", 14); progress_group.add_child(enemy_count_label)
     var spacer := Control.new()
     spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     row.add_child(spacer)
@@ -211,6 +218,57 @@ func _build_top_bar(parent: Control) -> void:
     var settings_button := Button.new(); settings_button.icon = visual_assets.settings; settings_button.expand_icon = true; settings_button.custom_minimum_size = Vector2(42, 38); settings_button.tooltip_text = LocalizationService.tr_key("game.settings.title"); settings_button.process_mode = Node.PROCESS_MODE_ALWAYS; _style_game_button(settings_button); settings_button.pressed.connect(_on_settings_pressed); row.add_child(settings_button)
     var recipes_button := Button.new(); recipes_button.icon = visual_assets.recipes; recipes_button.expand_icon = true; recipes_button.custom_minimum_size = Vector2(42, 38); recipes_button.tooltip_text = LocalizationService.tr_key("game.recipes.title"); recipes_button.process_mode = Node.PROCESS_MODE_ALWAYS; _style_game_button(recipes_button); recipes_button.pressed.connect(_toggle_recipes); row.add_child(recipes_button)
     var guide_button := Button.new(); guide_button.icon = visual_assets.help; guide_button.expand_icon = true; guide_button.custom_minimum_size = Vector2(42, 38); guide_button.tooltip_text = LocalizationService.tr_key("game.help.title"); guide_button.process_mode = Node.PROCESS_MODE_ALWAYS; _style_game_button(guide_button); guide_button.pressed.connect(_toggle_help); row.add_child(guide_button)
+
+func _create_player_probability_panel() -> void:
+    xp_probability_panel = PanelContainer.new()
+    xp_probability_panel.name = "PlayerQualityProbabilityPanel"
+    xp_probability_panel.visible = false
+    xp_probability_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    xp_probability_panel.z_index = 400
+    xp_probability_panel.custom_minimum_size = Vector2(292, 0)
+    xp_probability_panel.add_theme_stylebox_override("panel", _hud_panel())
+    var margin := MarginContainer.new()
+    margin.add_theme_constant_override("margin_left", 12)
+    margin.add_theme_constant_override("margin_top", 10)
+    margin.add_theme_constant_override("margin_right", 12)
+    margin.add_theme_constant_override("margin_bottom", 10)
+    xp_probability_panel.add_child(margin)
+    xp_probability_label = Label.new()
+    xp_probability_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    xp_probability_label.add_theme_font_size_override("font_size", 15)
+    xp_probability_label.add_theme_color_override("font_color", Color("fff3d6"))
+    margin.add_child(xp_probability_label)
+    add_child(xp_probability_panel)
+    _refresh_player_probability_panel()
+
+func _refresh_player_probability_panel() -> void:
+    var content := _player_quality_probability_tooltip()
+    if is_instance_valid(xp_probability_label):
+        xp_probability_label.text = content
+    if is_instance_valid(xp_probability_panel) and is_instance_valid(player_level_label):
+        var tooltip := content
+        player_level_label.tooltip_text = tooltip
+        xp_bar.tooltip_text = tooltip
+        xp_value_label.tooltip_text = tooltip
+
+func _show_player_probability_panel(xp_group: Control) -> void:
+    if not is_instance_valid(xp_probability_panel):
+        return
+    _refresh_player_probability_panel()
+    xp_probability_panel.visible = true
+    await get_tree().process_frame
+    var group_rect := xp_group.get_global_rect()
+    var local_group_position: Vector2 = get_global_transform_with_canvas().affine_inverse() * group_rect.position
+    var panel_position: Vector2 = local_group_position + Vector2(0, group_rect.size.y + 8)
+    if panel_position.x + xp_probability_panel.size.x > size.x:
+        panel_position.x = maxf(8.0, size.x - xp_probability_panel.size.x - 8.0)
+    if panel_position.y + xp_probability_panel.size.y > size.y:
+        panel_position.y = maxf(8.0, local_group_position.y - xp_probability_panel.size.y - 8.0)
+    xp_probability_panel.position = panel_position
+
+func _hide_player_probability_panel() -> void:
+    if is_instance_valid(xp_probability_panel):
+        xp_probability_panel.visible = false
 
 func _hud_separator() -> Label:
     var separator := Label.new()
@@ -545,7 +603,7 @@ func _open_combination_popup_for(gem: GemInstance) -> void:
     var selected_tower := selection.value as TowerRuntime if selection.kind == SelectionState.Kind.TOWER else null
     if selected_tower == null and not _can_open_gem_context_popup(gem): return
     command_model.rebuild(runtime, selection)
-    combination_options = [] if selected_tower != null else runtime.construction.contextual_combinations(gem)
+    combination_options = runtime.construction.contextual_combinations(gem)
     combination_popup = PanelContainer.new()
     combination_popup.name = "CombinationPopup"
     # Context panels must stay above every map layer, including authored
@@ -568,6 +626,16 @@ func _open_combination_popup_for(gem: GemInstance) -> void:
     entity_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     entity_icon.texture = _tower_texture(gem.id, gem.level) if selected_tower != null else _gem_texture(gem.id, gem.level)
     entity_header.add_child(entity_icon)
+    if selected_tower != null and runtime.phases.phase == GamePhaseMachine.Phase.COMBAT:
+        var selection_badge := TextureRect.new()
+        selection_badge.texture = visual_assets.tower_selection
+        selection_badge.custom_minimum_size = Vector2(24, 24)
+        selection_badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        selection_badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        selection_badge.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+        selection_badge.tooltip_text = LocalizationService.tr_key("game.selection.tower_configure")
+        selection_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        entity_header.add_child(selection_badge)
     var entity_info := VBoxContainer.new()
     var entity_name := Label.new()
     entity_name.text = _quality_label(gem.quality) + " " + _display_gem_name(gem.id)
@@ -1017,7 +1085,7 @@ func _open_gem_gallery() -> void:
     gem_gallery.setup(gem_assets, func():
         if is_instance_valid(gem_gallery): gem_gallery.queue_free()
         gem_gallery = null
-    )
+    , visual_assets)
     add_child(gem_gallery)
 
 func _restart() -> void:
@@ -1062,16 +1130,25 @@ func _populate_recipes() -> void:
             var chip_row := HBoxContainer.new(); chip_row.add_theme_constant_override("separation", 3); chip.add_child(chip_row)
             _add_gem_icon(chip_row, ingredient_id, ingredient_level, 27)
             var chip_label := Label.new(); chip_label.text = "%s L%s" % [_display_gem_name(ingredient_id), ingredient_level]; chip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; chip_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; chip_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; chip_label.add_theme_color_override("font_color", Color("3b2418")); chip_row.add_child(chip_label)
+            # Keep every ingredient chip in the formula container.  The chip
+            # was built correctly but never attached, which left only the
+            # separators visible in the Recipes overlay.
+            formula.add_child(chip)
         shown += 1
     if shown == 0:
         var empty := Label.new(); empty.text = LocalizationService.tr_key("game.help.empty"); empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; empty.add_theme_color_override("font_color", Color("6d4a32")); empty.custom_minimum_size = Vector2(0, 72); empty.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; recipe_rows.add_child(empty)
 
 func _recipe_reference_state(gem_id: StringName, level: int) -> int:
+    var construction_phase := runtime != null and runtime.phases != null and runtime.phases.phase == GamePhaseMachine.Phase.CONSTRUCTION
     var in_field := false
     for gem: GemInstance in runtime.construction.board_gems:
-        if gem not in runtime.construction.current_gems and gem.id == gem_id and gem.level == level: in_field = true; break
+        if (not construction_phase or gem not in runtime.construction.current_gems) and gem.id == gem_id and gem.level == level: in_field = true; break
     var in_construction := false
-    for gem: GemInstance in runtime.construction.available_gems:
+    # current_gems is the authoritative temporary Construction selection.  The
+    # generated pending pool is not on the board yet and must not paint an
+    # ingredient as if it were already present.
+    var construction_gems: Array = runtime.construction.current_gems if construction_phase else []
+    for gem: GemInstance in construction_gems:
         if gem.id == gem_id and gem.level == level: in_construction = true; break
     return (2 if in_field else 0) + (1 if in_construction else 0)
 
@@ -1651,14 +1728,12 @@ func _refresh_ui() -> void:
         player_level_label.text = LocalizationService.tr_key("game.player.level", {"level": runtime.progression.quality_level})
     if is_instance_valid(xp_bar) and runtime.progression != null:
         xp_bar.value = runtime.progression.progress_ratio() * 100.0
-        var quality_tooltip := _player_quality_probability_tooltip()
-        xp_bar.tooltip_text = quality_tooltip
-        if is_instance_valid(player_level_label): player_level_label.tooltip_text = quality_tooltip
-        if is_instance_valid(xp_value_label): xp_value_label.tooltip_text = quality_tooltip
+        _refresh_player_probability_panel()
     if is_instance_valid(xp_value_label) and runtime.progression != null:
         xp_value_label.text = LocalizationService.tr_key("game.player.xp_percent", {"percent": roundi(runtime.progression.progress_ratio() * 100.0)})
     if is_instance_valid(progress_bar): progress_bar.value = clampf(float(runtime.player_state.progress), 0.0, 100.0)
     if is_instance_valid(progress_value_label): progress_value_label.text = "%.2f%%" % float(runtime.player_state.progress)
+    if is_instance_valid(enemy_count_label): enemy_count_label.text = LocalizationService.tr_key("game.player.enemies", {"count": runtime.enemy_count_for_display()})
     _refresh_inspector_content()
     if is_instance_valid(inspector_panel): inspector_panel.visible = false
     if is_instance_valid(inspector_icon):
@@ -1749,7 +1824,9 @@ func _refresh_inspector_content() -> void:
     elif selection.kind == SelectionState.Kind.TOWER:
         inspector_title_label.text = LocalizationService.tr_key("game.inspector.tower.title")
         var tower: TowerRuntime = selection.value
-        inspector_name_label.text = "[b]%s[/b]" % _display_gem_name(tower.id)
+        var tower_quality := _quality_label(tower.gem.quality) if tower.gem != null else ""
+        var tower_name := _display_gem_name(tower.id)
+        inspector_name_label.text = "[b]%s[/b]" % (tower_quality + " " + tower_name if not tower_quality.is_empty() else tower_name)
         inspector_stats_label.text = LocalizationService.tr_key("game.inspector.tower.stats", {"level": tower.gem.level if tower.gem != null else 1, "damage": "%.1f" % tower.stats.damage, "range": "%.1f" % tower.stats.range_units, "speed": "%.1f" % tower.stats.total_attack_speed(), "abilities": ", ".join(tower.abilities) if not tower.abilities.is_empty() else "—"})
     elif selection.kind == SelectionState.Kind.ENEMY:
         inspector_title_label.text = LocalizationService.tr_key("game.inspector.enemy.title")
@@ -1776,7 +1853,10 @@ func _gem_abilities(gem: GemInstance) -> String:
     var described := PackedStringArray()
     for value in values:
         var parts := value.split(" ", false)
-        var key := parts[0].to_lower()
+        var key := value.to_lower().strip_edges().replace("-", "_").replace(" ", "_")
+        var key_parts: Array = Array(key.split("_", false))
+        if not key_parts.is_empty() and key_parts[-1].is_valid_int(): key_parts.pop_back()
+        key = "_".join(key_parts)
         var level := int(parts[1]) if parts.size() > 1 and parts[1].is_valid_int() else gem.level
         var description: String = LocalizationService.tr_key("game.ability.%s" % key, {"level": level})
         described.append("%s — %s" % [value, description] if description != "game.ability.%s" % key else value)
@@ -1799,7 +1879,9 @@ func _selection_summary() -> String:
         return LocalizationService.tr_key("game.selection.enemy", {"id": LocalizationService.enemy_display_name(enemy.profile_id, catalog_name), "hp": snapped(enemy.hp, 0.1), "max_hp": snapped(enemy.max_hp, 0.1), "armor": enemy.armor, "magic": enemy.magic_resistance})
     if selection.kind == SelectionState.Kind.TOWER:
         var tower: TowerRuntime = selection.value
-        return LocalizationService.tr_key("game.selection.tower", {"id": _display_gem_name(tower.id), "damage": snapped(tower.stats.damage, 0.1), "range": snapped(tower.stats.range_units, 0.1), "stopped": LocalizationService.tr_key("game.state.stopped" if tower.stopped else "game.state.active")})
+        var tower_name := _display_gem_name(tower.id)
+        if tower.gem != null: tower_name = "%s %s" % [_quality_label(tower.gem.quality), tower_name]
+        return LocalizationService.tr_key("game.selection.tower", {"id": tower_name, "damage": snapped(tower.stats.damage, 0.1), "range": snapped(tower.stats.range_units, 0.1), "stopped": LocalizationService.tr_key("game.state.stopped" if tower.stopped else "game.state.active")})
     return LocalizationService.tr_key("game.selection.stone")
 
 func _hud_panel() -> StyleBoxTexture:
@@ -1966,12 +2048,17 @@ class MapDebugView extends Control:
         zoom_bar.position = Vector2(2, 2)
         zoom_bar.z_index = 250
         zoom_bar.add_theme_constant_override("separation", 4)
-        for item in [["−", -0.1], ["＋", 0.1], ["⌂", 0.0]]:
-            var button := Button.new(); button.text = item[0]; button.custom_minimum_size = Vector2(30, 30); button.tooltip_text = LocalizationService.tr_key("game.zoom"); view._style_game_button(button)
+        var zoom_items := [
+            {"icon": view.visual_assets.zoom_minus, "delta": -0.1, "tooltip": LocalizationService.tr_key("game.zoom.out")},
+            {"icon": view.visual_assets.zoom_plus, "delta": 0.1, "tooltip": LocalizationService.tr_key("game.zoom.in")},
+            {"icon": view.visual_assets.zoom_reset, "delta": 0.0, "tooltip": LocalizationService.tr_key("game.zoom.reset")}
+        ]
+        for item: Dictionary in zoom_items:
+            var button := Button.new(); button.text = ""; button.icon = item.icon; button.expand_icon = true; button.add_theme_constant_override("icon_max_width", 22); button.custom_minimum_size = Vector2(30, 30); button.tooltip_text = item.tooltip; view._style_game_button(button)
             button.pressed.connect(func():
                 view._close_context_popup_for_camera_change()
-                if item[1] == 0.0: map_zoom = 1.0; map_pan = Vector2.ZERO
-                else: map_zoom = clampf(map_zoom + float(item[1]), 0.65, 2.5); _center_zoom()
+                if is_zero_approx(float(item.delta)): map_zoom = 1.0; map_pan = Vector2.ZERO
+                else: _zoom_at(_zoom_focus(), float(item.delta))
                 _clamp_pan(); queue_redraw(); sync_gem_sprites())
             zoom_bar.add_child(button)
         add_child(zoom_bar)
@@ -2216,10 +2303,10 @@ class MapDebugView extends Control:
                 _sync_authored_map_transform(current_board_rect)
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
             view._close_context_popup_for_camera_change()
-            map_zoom = clampf(map_zoom + 0.1, 0.65, 2.5); _center_zoom(); _clamp_pan(); queue_redraw(); sync_gem_sprites(); return
+            _zoom_at(event.position, 0.1); _clamp_pan(); queue_redraw(); sync_gem_sprites(); return
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
             view._close_context_popup_for_camera_change()
-            map_zoom = clampf(map_zoom - 0.1, 0.65, 2.5); _center_zoom(); _clamp_pan(); queue_redraw(); sync_gem_sprites(); return
+            _zoom_at(event.position, -0.1); _clamp_pan(); queue_redraw(); sync_gem_sprites(); return
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
             if event.pressed: view._close_context_popup_for_camera_change()
             dragging = event.pressed; drag_start = event.position; pan_start = map_pan; return
@@ -2373,9 +2460,25 @@ class MapDebugView extends Control:
         map_pan.x = clampf(map_pan.x, min_offset.x, max_offset.x)
         map_pan.y = clampf(map_pan.y, min_offset.y, max_offset.y)
 
-    func _center_zoom() -> void:
-        var board_size := _board_rect().size
-        map_pan = (board_size - board_size * map_zoom) * 0.5
+    func _zoom_focus() -> Vector2:
+        var board_rect := _board_rect()
+        var pointer := get_local_mouse_position()
+        return pointer if board_rect.has_point(pointer) else board_rect.position + board_rect.size * 0.5
+
+    func _zoom_at(pointer_position: Vector2, delta: float) -> void:
+        var board_rect := _board_rect()
+        if board_rect.size == Vector2.ZERO or map_zoom <= 0.0:
+            return
+        var next_zoom := clampf(map_zoom + delta, 0.65, 2.5)
+        if is_equal_approx(next_zoom, map_zoom):
+            return
+        # Keep the authored map point under the cursor invariant while the
+        # scale changes. `map_pan` is expressed in the board's unscaled view
+        # pixels, so the focal point must be converted to that same space.
+        var focus := pointer_position - board_rect.position
+        var authored_offset := (focus - map_pan) / map_zoom
+        map_zoom = next_zoom
+        map_pan = focus - authored_offset * map_zoom
     func _can_preview_placement(cell: Vector2i) -> bool:
         return runtime != null and runtime.construction.can_place_at(cell)
 

@@ -5,10 +5,12 @@ const GemAssetLibraryScript = preload("res://src/gameplay/assets/gem_asset_libra
 
 var library: GemAssetLibrary
 var close_requested: Callable
+var visual_assets: VisualAssetConfig
 
-func setup(asset_library: GemAssetLibrary, on_close: Callable) -> void:
+func setup(asset_library: GemAssetLibrary, on_close: Callable, shared_visual_assets: VisualAssetConfig = null) -> void:
     library = asset_library
     close_requested = on_close
+    visual_assets = shared_visual_assets if shared_visual_assets != null else VisualAssetConfig.new()
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     mouse_filter = Control.MOUSE_FILTER_STOP
     texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -37,8 +39,13 @@ func _build() -> void:
     title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     header.add_child(title)
     var close := Button.new()
-    close.text = "Close"
-    close.custom_minimum_size = Vector2(100, 34)
+    close.text = ""
+    close.icon = visual_assets.close
+    close.expand_icon = true
+    close.add_theme_constant_override("icon_max_width", 26)
+    close.tooltip_text = LocalizationService.tr_key("game.close")
+    close.custom_minimum_size = Vector2(42, 34)
+    CursorManager.set_clickable(close)
     close.pressed.connect(func(): close_requested.call() if close_requested.is_valid() else queue_free())
     header.add_child(close)
     column.add_child(header)

@@ -97,9 +97,12 @@ func refresh_waypoint_path(cells: Array[Vector2i]) -> void:
 	if movement_type.to_lower() != "flying" or cells.is_empty(): return
 	var rebuilt: Array[Vector2] = []
 	for cell in cells: rebuilt.append(Vector2(cell) * 100.0 + Vector2.ONE * 50.0)
-	var closest := 0
+	# A live enemy may only continue from its current progress.  Searching the
+	# whole route can select an earlier waypoint after a construction update and
+	# make the enemy visibly walk backwards.
+	var closest := mini(path_index, rebuilt.size() - 1)
 	var closest_distance := INF
-	for index in range(rebuilt.size()):
+	for index in range(closest, rebuilt.size()):
 		var distance := position.distance_squared_to(rebuilt[index])
 		if distance < closest_distance:
 			closest_distance = distance
@@ -112,9 +115,9 @@ func refresh_path(cells: Array[Vector2i]) -> void:
 	var rebuilt: Array[Vector2] = []
 	for cell in cells: rebuilt.append(Vector2(cell) * 100.0 + Vector2.ONE * 50.0)
 	if rebuilt.is_empty(): return
-	var closest := 0
+	var closest := mini(path_index, rebuilt.size() - 1)
 	var closest_distance := INF
-	for index in range(rebuilt.size()):
+	for index in range(closest, rebuilt.size()):
 		var distance := position.distance_squared_to(rebuilt[index])
 		if distance < closest_distance:
 			closest_distance = distance

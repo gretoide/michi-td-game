@@ -10,6 +10,7 @@ func run(suite: FoundationTestSuite) -> void:
 	_test_magic_gem_damages_physical_immune_enemy(suite)
 	_test_cleave_hits_nearby_enemy(suite)
 	_test_split_hits_additional_target(suite)
+	_test_opal_aura_and_true_sight(suite)
 	var profile := EnemyProfileDefinition.new(); profile.id = &"test"; profile.hp = 25.0; profile.base_speed = 20.0
 	var definition := GemDefinition.new(); definition.id = &"diamond"; definition.levels = [{"level": 1, "damage": 50.0, "range": 1000.0, "base_attack_speed": 100.0, "bat": 1.0}]
 	var gem := GemInstance.new(&"diamond", 1, GemInstance.Quality.CHIPPED)
@@ -37,6 +38,11 @@ func _test_refresh_enemy_paths_preserves_progress(suite: FoundationTestSuite) ->
 	suite.expect_equal(combat.path_cells.size(), 4, "combat stores the latest global route")
 	combat.tick(1.0)
 	suite.expect(enemy.position != position_before, "enemy continues moving on the refreshed route")
+	# A repath must never snap a live enemy to an earlier cell on the route.
+	enemy.position = Vector2(150, 50)
+	enemy.path_index = 1
+	combat.refresh_enemy_paths([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)])
+	suite.expect(enemy.path_index >= 1, "repath preserves forward progress instead of selecting an earlier cell")
 
 func _test_movement_type_uses_correct_route(suite: FoundationTestSuite) -> void:
 	var profile := EnemyProfileDefinition.new(); profile.id = &"flying_path"; profile.movement_type = "Flying"; profile.base_speed = 100.0
@@ -87,6 +93,23 @@ func _test_split_hits_additional_target(suite: FoundationTestSuite) -> void:
 	var primary := combat.spawn_enemy(profile, Vector2i(1, 0)); var secondary := combat.spawn_enemy(profile, Vector2i(1, 0)); secondary.position = primary.position + Vector2(90, 0)
 	combat.tick(0.01); combat.tick(0.2)
 	suite.expect(primary.hp < primary.max_hp and secondary.hp < secondary.max_hp, "Split damages the primary and its additional target")
+
+func _test_opal_aura_and_true_sight(suite: FoundationTestSuite) -> void:
+	var profile := EnemyProfileDefinition.new(); profile.id = &"invisible_target"; profile.hp = 500.0; profile.base_speed = 20.0; profile.ability_ids = PackedStringArray(["invisible"])
+	var opal_definition := GemDefinition.new(); opal_definition.id = &"opal"; opal_definition.levels = [{"level": 1, "damage": 1.0, "range": 1000.0, "base_attack_speed": 100.0, "ability": "Aura 1"}]
+	var ruby_definition := GemDefinition.new(); ruby_definition.id = &"ruby"; ruby_definition.levels = [{"level": 1, "damage": 1.0, "range": 1000.0, "base_attack_speed": 100.0}]
+	var source := TowerRuntime.new(); source.setup(GemInstance.new(&"opal", 1, GemInstance.Quality.CHIPPED), opal_definition, Vector2.ZERO)
+	var ally := TowerRuntime.new(); ally.setup(GemInstance.new(&"ruby", 1, GemInstance.Quality.CHIPPED), ruby_definition, Vector2(300, 0))
+	var combat := CombatRuntime.new(); combat.setup(1000.0, [Vector2i.ZERO, Vector2i(1, 0)]); combat.add_tower(source); combat.add_tower(ally)
+	var enemy := combat.spawn_enemy(profile, Vector2i(1, 0)); enemy.position = Vector2(500, 0)
+	combat.tick(0.01)
+	suite.expect_equal(ally.stats.attack_speed_bonus, 20.0, "Opal applies the canonical Aura 1 attack speed bonus in range")
+	suite.expect(ally.can_detect_invisible, "Opal grants True Sight to allied towers in range")
+	suite.expect(ally.targeting.acquire(ally.position, ally.stats.range_units, [enemy], ally.can_detect_invisible) == enemy, "True Sight allows targeting an invisible enemy")
+	source.set_attack_enabled(false)
+	combat.tick(0.01)
+	suite.expect_equal(ally.stats.attack_speed_bonus, 0.0, "Opal attack speed bonus is removed when the source is disabled")
+	suite.expect(not ally.can_detect_invisible, "Opal True Sight is removed when the source is disabled")
 
 func _test_selection_before_placement(suite: FoundationTestSuite) -> void:
 	var runtime := GameRuntime.new()

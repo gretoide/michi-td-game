@@ -1,6 +1,7 @@
 extends Node
 
 @export var visual_assets: VisualAssetConfig = preload("res://src/shared/visual_asset_config.tres")
+const LoaderAnimationScript = preload("res://src/shared/loader_animation.gd")
 
 enum AccessState { LANDING, REGISTER, LOGIN, VERIFY_EMAIL, AUTHENTICATED_HOME }
 var access_state := AccessState.LANDING
@@ -44,9 +45,8 @@ var combat_music: AudioStreamPlayer
 var music_toggle_button: Button
 var locale_selector: LocaleSelector
 var global_controls_layer: Control
+var login_loader: Control
 var session_loader: Control
-var session_loader_timer: Timer
-var session_loader_frames: Array[Texture2D] = []
 var game_runtime: GameRuntime
 var gameplay_view: GameplayView
 var settings_store: SettingsStore
@@ -270,6 +270,7 @@ func _open_auth(register: bool) -> void:
 	_fade_content()
 func _show_landing() -> void:
 	global_controls_layer.visible = true
+	_hide_login_loader()
 	_hide_session_loader()
 	parchment_brightener.visible = false
 	access_state = AccessState.LANDING
@@ -295,14 +296,17 @@ func _show_landing() -> void:
 func _fade_content() -> void: root_ui.modulate.a = 0.0; create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT).tween_property(root_ui,"modulate:a",1.0,0.22)
 func _submit_auth() -> void:
 	message_panel.visible = false; message_label.text = ""; submit_button.disabled = true
-	if register_mode: verification_email = email_input.text.strip_edges(); verification_password = password_input.text; auth.register(alias_input.text,email_input.text,password_input.text)
-	else: auth.login(email_input.text,password_input.text)
+	if register_mode:
+		verification_email = email_input.text.strip_edges(); verification_password = password_input.text; auth.register(alias_input.text,email_input.text,password_input.text)
+	else:
+		_show_login_loader(); auth.login(email_input.text,password_input.text)
 func _on_auth_succeeded(session: Dictionary) -> void:
 	UiSoundManager.play_confirmation()
 	submit_button.disabled = false
 	_start_new_game()
 
 func _start_new_game() -> void:
+	_hide_login_loader()
 	_hide_session_loader()
 	game_runtime = GameRuntime.new()
 	var errors := game_runtime.initialize()
@@ -339,7 +343,7 @@ func _on_gameplay_logout_requested() -> void:
 func _on_gameplay_exit_requested() -> void:
 	get_tree().quit()
 
-func _on_verification_required(email: String) -> void: submit_button.disabled = false; verification_email = email if email != "" else email_input.text.strip_edges(); verification_password = password_input.text; _show_verification()
+func _on_verification_required(email: String) -> void: _hide_login_loader(); submit_button.disabled = false; verification_email = email if email != "" else email_input.text.strip_edges(); verification_password = password_input.text; _show_verification()
 func _show_verification() -> void:
 	global_controls_layer.visible = true
 	access_state = AccessState.VERIFY_EMAIL; glass_panel.custom_minimum_size = Vector2(640,520); parchment_brightener.visible = false; root_ui.visible = false; back_button.visible = true; verification = EmailVerificationView.new(); verification.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); verification.setup(verification_email); verification.verify_requested.connect(_verify_code); verification.resend_requested.connect(_resend_code); parchment_panel.add_child(verification)
@@ -352,8 +356,16 @@ func _on_resend_succeeded() -> void:
 	if is_instance_valid(verification): verification.set_busy(false); verification.show_message(LocalizationService.tr_key("verification.resent"), false)
 func _on_auth_failed(error: String) -> void:
 	UiSoundManager.play_error()
+	_hide_login_loader()
 	submit_button.disabled = false
-	if is_instance_valid(verification): verification.set_busy(false); verification.show_message(_friendly_error(error)); return
+	if is_instance_valid(verification):
+		verification.set_busy(false)
+		verification.show_message(_friendly_error(error))
+		return
+	# A failed login hides the form while the request is in flight. Restore it
+	# before showing the error so the player can correct and retry immediately.
+	root_ui.visible = true
+	back_button.visible = true
 	var lower := error.to_lower()
 	if register_mode and not verification_email.is_empty() and ("verification_delivery_failed" in lower or "email_not_configured" in lower or "no se pudo enviar el email" in lower or "email no está configurado" in lower):
 		_show_verification()
@@ -365,6 +377,7 @@ func _on_auth_failed(error: String) -> void:
 	message_panel.custom_minimum_size.y = clampf(72.0 + message_lines * 22.0,108.0,174.0)
 	message_panel.visible = true
 func _show_welcome(alias := "") -> void:
+	_hide_login_loader()
 	_hide_session_loader()
 	parchment_brightener.visible = false
 	var display_alias := alias if not alias.is_empty() else str(SessionStore.user.get("alias", "jugador"))
@@ -385,7 +398,28 @@ func _show_welcome(alias := "") -> void:
 	welcome.logout_requested.connect(func(): auth.logout(); _show_landing())
 	parchment_panel.add_child(welcome)
 
+func _show_login_loader() -> void:
+	_hide_login_loader()
+	root_ui.visible = false
+	back_button.visible = false
+	login_loader = CenterContainer.new()
+	login_loader.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	login_loader.z_index = 6
+	parchment_panel.add_child(login_loader)
+	var column := VBoxContainer.new()
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	column.add_theme_constant_override("separation", 16)
+	login_loader.add_child(column)
+	var loader_icon := _create_loader_icon()
+	column.add_child(loader_icon)
+
+func _hide_login_loader() -> void:
+	if is_instance_valid(login_loader):
+		login_loader.queue_free()
+	login_loader = null
+
 func _show_session_loader() -> void:
+	_hide_session_loader()
 	root_ui.visible = false
 	back_button.visible = false
 	session_loader = CenterContainer.new()
@@ -394,17 +428,29 @@ func _show_session_loader() -> void:
 	parchment_panel.add_child(session_loader)
 	var column := VBoxContainer.new(); column.alignment = BoxContainer.ALIGNMENT_CENTER; column.add_theme_constant_override("separation", 16); session_loader.add_child(column)
 	var label := Label.new(); label.text = LocalizationService.tr_key("session.restoring"); label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; label.add_theme_font_size_override("font_size", 24); label.add_theme_color_override("font_color", Color("321c12")); column.add_child(label)
-	session_loader_frames = [visual_assets.loader_hourglass_1, visual_assets.loader_hourglass_2, visual_assets.loader_hourglass_3]
-	var loader_icon := TextureRect.new(); loader_icon.texture = session_loader_frames[0]; loader_icon.custom_minimum_size = Vector2(48,48); loader_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; loader_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; loader_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER; column.add_child(loader_icon)
-	session_loader_timer = Timer.new(); session_loader_timer.wait_time = 0.3; session_loader_timer.timeout.connect(func():
-		if is_instance_valid(loader_icon) and session_loader_frames.size() > 0:
-			var frame := session_loader_frames.find(loader_icon.texture)
-			loader_icon.texture = session_loader_frames[(frame + 1) % session_loader_frames.size()]
-	); session_loader.add_child(session_loader_timer); session_loader_timer.start()
+	column.add_child(_create_hourglass_loader_icon())
+
+func _create_loader_icon() -> Control:
+	var loader_icon := LoaderAnimationScript.new()
+	loader_icon.custom_minimum_size = Vector2(190, 230)
+	loader_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	loader_icon.setup(visual_assets.login_loader)
+	return loader_icon
+
+func _create_hourglass_loader_icon() -> Control:
+	var loader_icon := LoaderAnimationScript.new()
+	loader_icon.custom_minimum_size = Vector2(48, 48)
+	loader_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	loader_icon.frames_per_second = 3.5
+	loader_icon.setup_frames([
+		visual_assets.loader_hourglass_1,
+		visual_assets.loader_hourglass_2,
+		visual_assets.loader_hourglass_3,
+		visual_assets.loader_hourglass_4,
+	])
+	return loader_icon
 
 func _hide_session_loader() -> void:
-	if is_instance_valid(session_loader_timer): session_loader_timer.stop()
-	session_loader_timer = null
 	if is_instance_valid(session_loader): session_loader.queue_free()
 	session_loader = null
 

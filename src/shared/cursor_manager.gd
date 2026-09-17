@@ -42,11 +42,9 @@ func set_map_cursor(construction_active: bool) -> void:
     if construction_active:
         set_construction_cursor(true)
         return
-    # Inside the map, an occupied or invalid cell must not be covered by one
-    # of the large pixel-art cursors. Reset only the arrow slot to the native
-    # cursor; the regular game cursor is restored when leaving the map.
-    Input.set_custom_mouse_cursor(null, Input.CURSOR_ARROW)
-    Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+    # Keep the selected Kenney cursor everywhere when no construction action
+    # is active, including occupied or invalid map cells.
+    _apply_normal()
 
 func restore_normal_cursor() -> void:
     _apply_normal()
@@ -64,7 +62,7 @@ func set_busy(busy: bool) -> void:
         _apply_normal()
 
 func _advance_loader() -> void:
-    _loader_index = (_loader_index + 1) % 2
+    _loader_index = (_loader_index + 1) % 4
     _apply_loader()
 
 func _apply_normal() -> void:
@@ -80,7 +78,8 @@ func _apply_normal() -> void:
     Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 
 func _apply_loader() -> void:
-    var source := visual_assets.cursor_loader_1 if _loader_index == 0 else visual_assets.cursor_loader_2
+    var frames: Array[Texture2D] = [visual_assets.cursor_loader_1, visual_assets.cursor_loader_2, visual_assets.cursor_loader_3, visual_assets.cursor_loader_4]
+    var source := frames[_loader_index]
     var texture := _scaled_texture(source, "loader_%d" % _loader_index)
     if texture == null:
         return

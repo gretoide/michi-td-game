@@ -70,8 +70,7 @@ bloqueado hasta resolver el candidato pendiente. El overlay visual continúa en 
 no duplica reglas. `SelectionState` mantiene una selección de gema, piedra o enemigo;
 `CommandCardModel` deriva doce acciones estables (`Q W E R / A S D F / Z X C V`) y el
 click del botón y su hotkey recorren el mismo handler. El mapa conserva la colocación y
-selección por click; el antiguo `ConstructionHarness` queda sólo como herramienta de
-pruebas y no se monta en el HUD.
+selección por click; no se monta ningún panel de construcción paralelo al HUD.
 
 El HUD muestra fase, wave/boss, progress, gold, XP, quality, vida, entidades y feedback.
 `SupportRewardRuntime.reward_available` abre un overlay modal de tres candidatos y sólo

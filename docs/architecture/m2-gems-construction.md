@@ -13,7 +13,7 @@ ConstructionRuntime
              ↓
 GameRuntime
              ↓
-ConstructionHarness (provisional) / GameplayView
+GameplayView
 ```
 
 `GemInstance` representa una gema colocada o candidata. Usa IDs estables, nivel 1–7, calidad, celda, ronda y MVP. `StoneInstance` conserva la celda ocupada por una gema descartada.
@@ -30,9 +30,9 @@ ConstructionHarness (provisional) / GameplayView
 
 `data/gameplay/catalog.tres` contiene los ocho IDs básicos y fixtures mínimos para recetas normales, secretas y resultados especiales. El dataset completo de 38 recetas normales + 8 secretas y las estadísticas definitivas permanece en M5.
 
-## Harness
+## Presentación
 
-`ConstructionHarness` es una herramienta provisional dentro de la vista de gameplay. Permite seleccionar coordenadas, colocar gemas, conservar, combinar, degradar y remover stones, mostrando contador, fase y estado. No sustituye el HUD final de M6.
+`GameplayView` es la única capa visible de construcción. Las reglas siguen viviendo en `ConstructionRuntime`; la vista sólo traduce selección, colocación, combinación, degradación y remoción de stones a acciones del runtime.
 
 ## Pruebas
 

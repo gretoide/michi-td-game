@@ -131,7 +131,7 @@ func start_first_wave() -> bool:
 	var profile := foundation.catalog.enemy_profile_by_id(definition.enemy_profile_id) as EnemyProfileDefinition
 	if profile == null: return false
 	current_wave_is_boss = definition.boss
-	definition.spawn_count = 1 if definition.boss else maxi(1, 10 + progress.future_count_modifier)
+	definition.spawn_count = enemy_count_for_wave(phases.wave_number)
 	player_state.base_enemy_count = definition.spawn_count
 	wave.start(definition, profile)
 	wave.wave_completed.connect(_on_wave_completed, CONNECT_ONE_SHOT)
@@ -142,6 +142,26 @@ func tick(delta: float) -> void:
 		wave.tick(delta)
 		combat.tick(delta)
 		effects.tick(delta)
+
+func enemy_count_for_display() -> int:
+	"""Return the count already resolved by the wave domain for the HUD.
+
+	During combat this is the active WaveRuntime total. During Construction it
+	uses the next catalog wave and the current future-count modifier, including
+	boss waves, without duplicating the Progress formula in the UI layer.
+	"""
+	if wave != null and wave.is_active():
+		return wave.total_count()
+	if phases == null: return 0
+	return enemy_count_for_wave(phases.wave_number)
+
+func enemy_count_for_wave(wave_number: int) -> int:
+	"""Single authoritative count for preview and the spawned WaveRuntime."""
+	if wave_definitions.is_empty(): return 0
+	var index := clampi(wave_number - 1, 0, wave_definitions.size() - 1)
+	var definition := wave_definitions[index] as WaveDefinition
+	if definition == null: return 0
+	return 1 if definition.boss else maxi(1, 10 + (progress.future_count_modifier if progress != null else 0))
 
 func _on_wave_enemy_spawned(wave_enemy_id: int, profile: EnemyProfileDefinition) -> void:
 	var enemy := combat.spawn_enemy(profile, map.spawn)

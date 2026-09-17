@@ -40,3 +40,9 @@ func _check_completed() -> void:
 
 func is_active() -> bool:
 	return _active
+
+func total_count() -> int:
+	# The HUD needs the authoritative count for the active wave.  Derive it
+	# from the runtime counters so it stays aligned with what WaveRuntime will
+	# actually instantiate, including enemies already resolved during combat.
+	return pending + alive + resolved if _definition != null else 0

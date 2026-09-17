@@ -72,6 +72,7 @@ func tick(delta: float) -> void:
 	for enemy in enemies:
 		enemy.tick_abilities(delta)
 		enemy.move_along_path(delta)
+	_refresh_tower_auras()
 	for tower in towers:
 		if not tower.attack_enabled:
 			tower.disarmed = false
@@ -88,6 +89,23 @@ func tick(delta: float) -> void:
 		if not projectile.tick(delta): projectiles.erase(projectile)
 	enemies = enemies.filter(func(enemy: EnemyRuntime): return enemy != null and enemy.is_alive())
 	combat_changed.emit()
+
+func _refresh_tower_auras() -> void:
+	# Auras are derived state: reset them every tick so moving/removing or
+	# disabling a source immediately removes its bonuses and True Sight.
+	for tower: TowerRuntime in towers:
+		if tower == null: continue
+		tower.stats.attack_speed_bonus = 0.0
+		tower.can_detect_invisible = false
+	for source: TowerRuntime in towers:
+		if source == null or not source.attack_enabled or not source.abilities.has("aura"): continue
+		var level := maxi(source.gem.level if source.gem != null else 1, 1)
+		var radius := INF if level >= 7 else 700.0
+		var bonus := 100.0 if level >= 7 else 10.0 * float(level) + 10.0
+		for tower: TowerRuntime in towers:
+			if tower == null or source.position.distance_to(tower.position) > radius: continue
+			tower.stats.attack_speed_bonus += bonus
+			tower.can_detect_invisible = true
 
 func _execute_tower_abilities(projectile: HomingProjectile) -> void:
 	if effect_system == null or projectile == null or projectile.target == null: return
